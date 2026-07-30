@@ -1,0 +1,1388 @@
+:root {
+  --surface-1: #fcfcfb;
+  --page: #f9f9f7;
+  --text-primary: #0b0b0b;
+  --text-secondary: #52514e;
+  --text-muted: #898781;
+  --gridline: #e1e0d9;
+  --baseline: #c3c2b7;
+  --border: rgba(11, 11, 11, 0.10);
+
+  --series-blue: #2a78d6;
+  --series-blue-wash: rgba(42, 120, 214, 0.10);
+  --series-red: #e34948;
+  --series-red-wash: rgba(227, 73, 72, 0.10);
+  --series-aqua: #1baf7a;
+  --series-yellow: #eda100;
+  --series-green: #4c9a41;
+
+  --good: #006300;
+  --critical: #d03b3b;
+
+  --radius: 14px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --surface-1: #1a1a19;
+    --page: #0d0d0d;
+    --text-primary: #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted: #898781;
+    --gridline: #2c2c2a;
+    --baseline: #383835;
+    --border: rgba(255, 255, 255, 0.10);
+
+    --series-blue: #3987e5;
+    --series-blue-wash: rgba(57, 135, 229, 0.14);
+    --series-red: #e66767;
+    --series-red-wash: rgba(230, 103, 103, 0.14);
+    --series-aqua: #199e70;
+    --series-yellow: #c98500;
+    --series-green: #6ab85c;
+
+    --good: #0ca30c;
+    --critical: #ec835a;
+  }
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--page);
+  color: var(--text-primary);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  -webkit-tap-highlight-color: transparent;
+  overflow-x: hidden;
+  max-width: 100vw;
+}
+
+body {
+  padding-bottom: calc(64px + env(safe-area-inset-bottom));
+  min-height: 100vh;
+  /* iOS Safari 地址栏收放时 100vh 是"收起后"那个更大的静态值，
+     地址栏还没收起时页面实际可见区域比它矮，会多出一截能滑的空白。
+     100dvh 才是跟着地址栏实时变化的真实高度。 */
+  min-height: 100dvh;
+}
+
+.sticky-top {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--page);
+}
+
+.page-header {
+  padding: calc(12px + env(safe-area-inset-top)) 16px 8px;
+}
+
+.page-header h1 {
+  font-size: 18px;
+  margin: 0;
+  font-weight: 600;
+}
+
+/* ---- save bar ---- */
+.save-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 16px;
+  background: var(--page);
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+/* 「积压未上传」是常态而不是事故——本地优先的设计里记录本来就先落在本机，
+   所以用平静的次要色，不用红色制造焦虑。红色只留给真正的上传失败。 */
+.save-bar[data-mode="dirty"] #save-status { color: var(--text-secondary); }
+.save-bar[data-mode="saving"] #save-status { color: var(--text-secondary); }
+.save-bar[data-mode="saved"] #save-status,
+.save-bar[data-mode="synced"] #save-status { color: var(--good); }
+.save-bar[data-mode="local"] #save-status { color: var(--text-secondary); }
+.save-bar[data-mode="error"] #save-status { color: var(--critical); font-weight: 600; }
+.save-bar button {
+  border: none;
+  background: var(--series-blue);
+  color: white;
+  border-radius: 999px;
+  padding: 6px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  flex: none;
+}
+
+.app-loading {
+  padding: 40px 16px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+main {
+  padding: 16px;
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+.view { display: none; }
+.view.active { display: block; }
+
+
+/* ---- hero stat tile ---- */
+.hero-card {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-bottom: 16px;
+  text-align: center;
+}
+.hero-label {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+.hero-value {
+  font-size: 44px;
+  font-weight: 600;
+  line-height: 1.1;
+}
+.hero-value .unit { font-size: 18px; font-weight: 500; margin-left: 4px; color: var(--text-secondary); }
+.hero-value.good { color: var(--good); }
+.hero-value.critical { color: var(--critical); }
+.hero-sub {
+  margin-top: 10px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  display: flex;
+  justify-content: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.hero-sub b { color: var(--text-primary); font-variant-numeric: tabular-nums; }
+
+
+/* ---- kpi row ---- */
+.kpi-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.kpi-tile {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+  text-align: center;
+}
+.kpi-tile .kpi-label { font-size: 11px; color: var(--text-secondary); margin-bottom: 4px; }
+.kpi-tile .kpi-value { font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.kpi-tile .kpi-value.good { color: var(--good); }
+.kpi-tile .kpi-value.critical { color: var(--critical); }
+
+
+/* ---- settings ---- */
+.settings-section {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 14px;
+}
+.settings-section h2 {
+  font-size: 14px;
+  margin: 0 0 12px;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.settings-btn {
+  display: block;
+  width: 100%;
+  border: 1px solid var(--border);
+  background: var(--page);
+  color: var(--text-primary);
+  border-radius: 10px;
+  padding: 10px;
+  font-size: 14px;
+  margin-bottom: 8px;
+}
+.settings-btn.danger { color: var(--critical); border-color: var(--critical); }
+.settings-note { font-size: 12px; color: var(--text-muted); line-height: 1.6; }
+
+
+/* ---- toast ---- */
+.toast {
+  position: fixed;
+  bottom: calc(76px + env(safe-area-inset-bottom));
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--text-primary);
+  color: var(--page);
+  padding: 8px 16px;
+  border-radius: 999px;
+  font-size: 13px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s, transform 0.2s;
+  z-index: 20;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(-4px); }
+
+
+/* ---- bottom nav ---- */
+.tab-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  background: var(--surface-1);
+  border-top: 1px solid var(--border);
+  padding-bottom: env(safe-area-inset-bottom);
+  z-index: 10;
+}
+.tab-bar button {
+  flex: 1;
+  border: none;
+  background: none;
+  padding: 10px 4px 8px;
+  font-size: 11px;
+  color: var(--text-muted);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+.tab-bar button .tab-icon { font-size: 20px; }
+.tab-bar button.active { color: var(--series-blue); }
+.tab-bar button[disabled] { opacity: 0.4; }
+
+
+/* ---- 重训页 ---- */
+/* A / B 训练计划切换，沿用历史页 .range-row 的胶囊按钮语言 */
+.split-switch {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.split-switch button {
+  flex: 1;
+  border: 1px solid var(--border);
+  background: var(--surface-1);
+  color: var(--text-secondary);
+  border-radius: 999px;
+  padding: 9px 0;
+  font-size: 14px;
+  font-weight: 500;
+}
+.split-switch button.active {
+  background: var(--series-blue);
+  border-color: var(--series-blue);
+  color: #fff;
+}
+
+.exercise-card {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+  margin-bottom: 12px;
+}
+.exercise-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+}
+.exercise-head .exercise-name { font-size: 15px; font-weight: 600; }
+.exercise-head .exercise-summary {
+  font-size: 13px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.last-session {
+  margin-top: 3px;
+  font-size: 12px;
+  color: var(--series-blue);
+  font-variant-numeric: tabular-nums;
+}
+.last-session.muted { color: var(--text-muted); }
+
+.set-list { margin-top: 8px; }
+.set-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--gridline);
+  font-size: 14px;
+}
+.set-row:last-of-type { border-bottom: none; }
+.set-row .set-idx {
+  flex: none;
+  width: 18px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.set-row .set-weight-label {
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  min-width: 62px;
+}
+.set-row .set-x { color: var(--text-muted); font-size: 12px; }
+.set-row .set-reps-label {
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  flex: 1;
+}
+.set-row .set-tag { flex: none; font-size: 12px; }
+.set-row .set-del {
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  font-size: 18px;
+  line-height: 1;
+  padding: 4px 6px;
+  flex: none;
+}
+.set-empty {
+  padding: 7px 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.add-row .set-weight { flex: 1.2; min-width: 0; width: 0; }
+.add-row .set-reps { flex: 1; min-width: 0; width: 0; }
+.add-row .set-bodyweight {
+  flex: 1.2;
+  display: flex;
+  align-items: center;
+  padding-left: 4px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.add-row .tag-toggle {
+  --tag-color: var(--series-blue);
+  flex: none;
+  border: 1px solid var(--border);
+  background: var(--page);
+  color: var(--tag-color);
+  border-radius: 8px;
+  padding: 0 10px;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.add-row .set-add {
+  flex: none;
+  border: none;
+  background: var(--series-blue);
+  color: white;
+  border-radius: 8px;
+  width: 36px;
+  font-size: 18px;
+  font-weight: 500;
+}
+.add-row .cardio-min { flex: 1; min-width: 0; width: 0; }
+.add-row .cardio-save {
+  flex: none;
+  border: none;
+  background: var(--series-blue);
+  color: white;
+  border-radius: 8px;
+  padding: 0 16px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.empty-hint {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px 16px;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.7;
+}
+.empty-hint p { margin: 0; }
+.empty-hint p + p { margin-top: 6px; color: var(--text-muted); font-size: 13px; }
+
+/* ---- 动作库（设置页）---- */
+.catalog-split-head {
+  margin: 14px 0 4px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+.catalog-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--gridline);
+  cursor: pointer;
+}
+.catalog-row:last-of-type { border-bottom: none; }
+.catalog-row.archived { opacity: 0.45; }
+.catalog-row-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.catalog-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.catalog-sub {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+.catalog-row > button {
+  flex: none;
+  border: 1px solid var(--border);
+  background: var(--page);
+  color: var(--text-secondary);
+  border-radius: 8px;
+  padding: 6px 9px;
+  font-size: 12px;
+  line-height: 1.2;
+}
+.catalog-chevron {
+  flex: none;
+  color: var(--text-muted);
+  font-size: 20px;
+  line-height: 1;
+  padding-left: 2px;
+}
+
+/* ---- 动作详情页（全屏覆盖层）---- */
+.detail-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: var(--page);
+  overflow-y: auto;
+  padding-bottom: 40px;
+}
+.detail-header {
+  position: sticky;
+  top: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 12px 12px 10px;
+  padding-top: max(12px, env(safe-area-inset-top));
+  background: var(--page);
+  border-bottom: 1px solid var(--border);
+}
+.detail-header button {
+  flex: none;
+  border: none;
+  background: none;
+  color: var(--series-blue);
+  font-size: 28px;
+  line-height: 1;
+  padding: 0 8px 0 0;
+}
+.detail-header h2 {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.detail-header .detail-edit-btn {
+  flex: none;
+  border: none;
+  background: none;
+  color: var(--series-blue);
+  font-size: 14px;
+  font-weight: 600;
+  padding: 6px 4px;
+}
+.detail-body { padding: 6px 16px; }
+
+.detail-field { margin-bottom: 20px; }
+.detail-field > label {
+  display: block;
+  margin-bottom: 7px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.detail-field > input,
+.detail-field > select {
+  width: 100%;
+  border: 1px solid var(--border);
+  background: var(--surface-1);
+  border-radius: 10px;
+  padding: 11px 12px;
+  font-size: 16px; /* 低于16px时iOS Safari聚焦会自动放大整页 */
+  color: var(--text-primary);
+}
+.detail-hint {
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-muted);
+}
+
+.pill-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.pill {
+  flex: 1 1 auto;
+  border: 1px solid var(--border);
+  background: var(--surface-1);
+  color: var(--text-secondary);
+  border-radius: 999px;
+  padding: 9px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.pill.active {
+  background: var(--series-blue);
+  border-color: var(--series-blue);
+  color: #fff;
+}
+
+.detail-danger {
+  margin-top: 34px;
+  padding-top: 18px;
+  border-top: 1px solid var(--gridline);
+}
+.detail-danger .settings-btn[disabled] { opacity: 0.35; }
+
+.catalog-add {
+  display: flex;
+  gap: 6px;
+  margin: 10px 0;
+}
+.catalog-add input {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--border);
+  background: var(--page);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 16px;
+  color: var(--text-primary);
+}
+.catalog-add select {
+  flex: none;
+  border: 1px solid var(--border);
+  background: var(--page);
+  border-radius: 8px;
+  padding: 8px;
+  font-size: 16px;
+  color: var(--text-primary);
+}
+.catalog-add button {
+  flex: none;
+  width: 40px;
+  border: none;
+  background: var(--series-blue);
+  color: #fff;
+  border-radius: 8px;
+  font-size: 18px;
+}
+
+/* ---- 全屏训练页 ---- */
+/* 顶部进度条：每个动作一段，各有各的颜色，段与段之间的空隙就是动作间的长休息 */
+.progress-bar {
+  display: flex;
+  flex: none;
+  gap: 13px;
+  height: 11px;
+  /* 通栏；位置在 6 行网格第 1 行的底部（y117），离头部远、离滚轮块近 */
+  margin: 22px -15px 20px;
+}
+.progress-bar:empty { display: none; }
+.prog-seg {
+  flex: 1;
+  position: relative;
+  background: var(--gridline);
+  border-radius: 3px;
+}
+.prog-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.25s ease;
+}
+
+/* 训练页整屏不滚动：把它撑满可用高度，让滚轮吃掉剩余空间，
+   其余元素定高。这样任何屏幕尺寸下都不会出现滚动条，
+   而不是靠算死数字去碰运气。训练中手上有汗还在喘，
+   需要滚动才能够到按钮是很糟的设计。 */
+.view[data-view="strength"] {
+  min-height: 0;
+  /* Figma 内容边距 40px：main 自带 16，这里补足 */
+  padding-left: 24px;
+  padding-right: 24px;
+}
+/* 高度由 fitSessionHeight() 实测后写在 style.height 上。
+   这里的 100dvh 只是 JS 还没跑之前的兜底，避免闪一下。
+   （dvh 会随 iOS 地址栏收放而变，比 vh 准。） */
+#strength-session {
+  display: flex;
+  flex-direction: column;
+  height: calc(100dvh - 280px);
+  min-height: 360px;
+  /* 不能 hidden：进度条要用负 margin 伸到 25px 外框，
+     hidden 会把伸出去的部分裁掉（上一版头部显示不全就是这个原因）。
+     页面级的溢出由外层 phone-screen 兜底。 */
+  overflow: visible;
+}
+#session-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 名称可能很长（保加利亚单腿蹲），挤在一行会把「动作要点」顶歪，
+   所以两行：名称一行（可换行），要点按钮独立一行靠左 */
+.name-block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+.session-exercise-name {
+  font-size: 32px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+.cue-btn {
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  font-size: 20px;
+  font-weight: 600;
+  padding: 0;
+}
+.cue-arrow { font-size: 13px; }
+
+/* 上次记录：日期在左、每组次数的圆点在右。不写「上次」，看日期就懂。 */
+.prev-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 24px;
+}
+.prev-date {
+  font-size: 16px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.prev-dots { display: flex; gap: 9px; }
+.pdot {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+  flex: none;
+}
+.prev-empty {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.warm-badge {
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--series-blue-wash);
+  color: var(--series-blue);
+  font-size: 12px;
+  font-weight: 500;
+  vertical-align: middle;
+}
+/* 次数滚轮：原生滚动 + scroll-snap，惯性手感交给系统。
+   flex:1 让它吃掉这一屏剩下的所有空间——屏幕大就大，屏幕小就小，永远不溢出。 */
+/* 上半区（滚轮 + 今日圆点）吃掉剩余空间，下半区固定 */
+.wheel-zone {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.info-zone {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 10px;
+}
+/* 区块内布局：滚轮在上部，圆点行钉底，休息按钮锚定区块右下（Figma 坐标） */
+.wheel-zone { position: relative; }
+.session-main {
+  display: flex;
+  justify-content: center;
+  flex: 1;
+  min-height: 160px;
+  max-height: 300px;
+}
+.reps-wheel {
+  width: 100%;
+  height: 225px;
+  align-self: center;
+  display: flex;
+  align-items: center;
+  overflow-x: scroll;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch; /* iOS 惯性滚动 */
+  touch-action: pan-x; /* 只吃横向拖拽 */
+  overscroll-behavior-x: contain; /* 拖到头时不要把整个页面带着滚 */
+  scrollbar-width: none;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 18%, #000 82%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 18%, #000 82%, transparent);
+}
+.reps-wheel::-webkit-scrollbar { display: none; }
+/* 上下占位：让第一项和最后一项也能滚到正中。
+   滚轮高度确定，所以这里的 50% 有依据 —— 半个滚轮减半个条目。 */
+.wheel-pad { width: calc(50% - 66px); height: 1px; flex: none; }
+.wheel-item {
+  width: 132px;
+  height: 100%;
+  flex: none;
+  scroll-snap-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 64px;
+  font-weight: 800;
+  color: var(--text-muted);
+  opacity: 0.45;
+  font-variant-numeric: tabular-nums;
+  /* 两位数在 128px 字号下比格子宽：禁止换行，允许字形溢出格子
+     （设计稿里当前数字本来就压着两侧的间隙） */
+  white-space: nowrap;
+  overflow: visible;
+  /* 每个数字都强制停顿：一次滑动只走一格，不会滑过头 */
+  scroll-snap-stop: always;
+  /* 字形会溢出格子互相压：当前数字必须永远在最上层 */
+  position: relative;
+  z-index: 1;
+  transition: font-size 0.12s, opacity 0.12s;
+}
+.wheel-item.active {
+  font-size: 188px;
+  font-weight: 800;
+  color: var(--text-primary);
+  opacity: 1;
+  z-index: 2;
+}
+
+.rest-buttons {
+  position: absolute;
+  right: 2px;
+  bottom: 51px;
+  display: flex;
+  flex-direction: row;
+  gap: 16px;
+  z-index: 2;
+}
+.round-btn {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: none;
+  background: var(--gridline);
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+/* 「调整休息」：暂停图标（两根竖条），不用文字 */
+.round-btn.pause { color: var(--text-secondary); }
+.pause-glyph {
+  display: inline-flex;
+  gap: 4px;
+  vertical-align: middle;
+}
+.pause-glyph::before,
+.pause-glyph::after {
+  content: '';
+  width: 4px;
+  height: 15px;
+  border-radius: 2px;
+  background: currentColor;
+}
+.round-btn.primary { background: var(--series-blue); color: #fff; } /* 训练中被内联动作色覆盖 */
+.round-btn.small { width: 31px; height: 31px; font-size: 22px; font-weight: 400; }
+.round-btn[disabled] { opacity: 0.3; }
+
+/* 圆点行：这个动作的各组。热身组和正式组颜色不一样。
+   已做完 = 满色 + 次数；正在做 = 同样的颜色但不显示数字，靠一圈描边标出位置；
+   还没做 = 灰色小点，只有 1/3 大小。 */
+.set-dots {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  height: 30px;
+  margin-top: auto;
+  margin-bottom: 5px;
+  flex: none;
+}
+.set-dot {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 700;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+  flex: none;
+}
+/* 没做的组（含正在做的）：13px 小灰点 —— 当前在哪一组，看滚轮就知道 */
+.set-dot.pending {
+  width: 13px;
+  height: 13px;
+  background: var(--baseline);
+}
+
+.weight-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex: none;
+  margin-top: 10px;
+}
+.weight-value {
+  flex: 0 0 auto;
+  width: 127px;
+  text-align: center;
+  background: var(--gridline);
+  border-radius: 7px;
+  padding: 2px 8px;
+  font-size: 24px;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 底部两个次要按钮并排一行：竖着放会多吃掉一整行高度，
+   而这一屏必须装得下，不能出滚动条。 */
+/* 底部两个次要按钮并排一行。flex:none + margin-top:auto —— 
+   永远贴在最下面，且绝不被压缩掉。之前它们被滚轮挤出了屏幕。 */
+.session-footer {
+  display: flex;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 12px;
+  flex: none;
+}
+.edit-plan-btn {
+  flex: 1;
+  min-width: 0;
+  padding: 11px 6px;
+  border-radius: 11px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+/* 提前结束：居中的灰色小按钮，低调，别和「确认这一组」抢注意力 */
+.finish-btn {
+  align-self: center;
+  min-width: 121px;
+  height: 37px;
+  padding: 2px 14px;
+  border: none;
+  border-radius: 7px;
+  background: var(--gridline);
+  color: var(--text-primary);
+  font-size: 24px;
+  font-weight: 400;
+}
+/* 项目编辑：更低调，它不是训练中会用的东西 */
+.edit-plan-btn {
+  border: 1px dashed var(--border);
+  background: none;
+  color: var(--text-muted);
+}
+/* 项目库为空时，这是唯一出口，得显眼 */
+.edit-plan-btn.primary {
+  border: none;
+  background: var(--series-blue);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 500;
+  padding: 13px;
+}
+
+/* 有氧：只有一个计时盘。同样不能出滚动条，所以让它吃掉剩余空间。 */
+.cardio-panel {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 26px;
+}
+.cardio-clock {
+  font-size: 62px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  margin: 0;
+}
+.cardio-panel .pill.wide { width: min(100%, 280px); }
+
+.session-done {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 10px 0;
+}
+.done-check {
+  width: 68px;
+  height: 68px;
+  margin: 0 auto 16px;
+  border-radius: 50%;
+  background: var(--series-aqua);
+  color: #fff;
+  font-size: 36px;
+  line-height: 68px;
+}
+.done-title { font-size: 20px; font-weight: 600; }
+.done-sub {
+  margin: 6px 0 22px;
+  font-size: 14px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.pill.wide { width: 100%; flex: none; padding: 12px; }
+.pill.primary { background: var(--series-blue); border-color: var(--series-blue); color: #fff; }
+
+/* ---- 组间休息：内嵌在滚轮区块里（Figma 13:6），顺时针减少 ---- */
+.wheel-zone .rest-inline { display: none; }
+.wheel-zone.resting .rest-inline {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+}
+.wheel-zone.resting .session-main,
+.wheel-zone.resting .rest-buttons,
+.wheel-zone.resting .set-dots {
+  display: none;
+}
+.rest-inline .rest-ring-wrap {
+  position: relative;
+  width: min(64vw, 258px);
+  height: min(64vw, 258px);
+  cursor: pointer;
+}
+.rest-inline .rest-ring-wrap svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+.rest-inline .rest-value {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 84px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.rest-inline .rest-hint { margin: 0; font-size: 15px; color: var(--text-muted); }
+.rest-inline #rest-add-30 {
+  flex: none;
+  width: 62px;
+  height: 62px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--surface-1);
+  color: var(--text-secondary);
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+.rest-inline #rest-add-30 span { font-size: 11px; font-weight: 400; color: var(--text-muted); }
+/* 「提前结束训练」只在暂停型休息里出现：想收工先按暂停缓一缓再决定 */
+.rest-inline .rest-finish { display: none; }
+.wheel-zone.adjust .rest-finish {
+  display: block;
+  border: none;
+  background: var(--gridline);
+  color: var(--text-primary);
+  border-radius: 7px;
+  min-width: 121px;
+  height: 37px;
+  padding: 2px 14px;
+  font-size: 20px;
+  font-weight: 400;
+}
+
+/* ---- （旧的全屏倒计时样式，plan/finish 确认弹窗仍复用 .rest-overlay 底） ---- */
+/* 圆环偏上：休息时人是低头看手机的，太靠下要抬手；
+   而且上移之后，下面留出的空间正好放「再加 30 秒」，不用挤在一起。 */
+.rest-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: var(--page);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 22px;
+  padding: 20px;
+  padding-top: max(14vh, 80px);
+}
+.rest-ring-wrap {
+  position: relative;
+  width: min(74vw, 280px);
+  height: min(74vw, 280px);
+  cursor: pointer;
+}
+.rest-ring-wrap svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+.ring-bg { fill: none; stroke: var(--gridline); stroke-width: 14; }
+.ring-fg {
+  fill: none;
+  stroke: var(--series-blue);
+  stroke-width: 14;
+  stroke-linecap: round;
+  /* 2 * π * 90 */
+  stroke-dasharray: 565.49;
+  stroke-dashoffset: 0;
+  transition: stroke-dashoffset 0.2s linear;
+}
+.rest-value {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 64px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.rest-hint { margin: 0; font-size: 13px; color: var(--text-muted); }
+
+/* 「+30 秒」：小圆按钮，别和主圆环抢视线 */
+#rest-add-30 {
+  flex: none;
+  width: 64px;
+  height: 64px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--surface-1);
+  color: var(--text-secondary);
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+#rest-add-30 span {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+/* ---- 选计划页（Figma 21:21）----
+   4 行网格：行高约 203.5、沟 20。标题第 1 行、A 第 2 行、B 第 3 行、第 4 行空。 */
+.chooser-grid {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: repeat(4, 1fr);
+  gap: 20px;
+}
+.chooser-head {
+  align-self: end;
+  padding-bottom: 30px;
+}
+.c-date {
+  display: block;
+  font-size: 16px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.c-title {
+  margin: 2px 0 0;
+  font-size: 40px;
+  font-weight: 700;
+}
+.plan-row {
+  display: flex;
+  align-items: center;
+  align-self: center;
+  gap: 46px;
+  width: 100%;
+  padding: 6px;
+  border: none;
+  background: none;
+  color: var(--text-primary);
+  text-align: left;
+}
+.plan-letter {
+  font-size: 128px;
+  font-weight: 700;
+  line-height: 1;
+  width: 107px;
+  text-align: center;
+}
+.plan-dotgrid {
+  display: grid;
+  grid-template-columns: repeat(2, 46px);
+  gap: 20px 23px;
+}
+.plan-dotgrid span {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+}
+
+/* ---- 确认页（Figma 21:100，同 4 行网格）---- */
+.confirm-letter {
+  align-self: center;
+  text-align: center;
+  font-size: 228px;
+  font-weight: 700;
+  line-height: 1.1;
+  margin: 0;
+}
+/* 第 3 行顶部起：清单 → 总时长 → 开始 → 再想想（间距按设计稿 y 值） */
+.confirm-bottom {
+  grid-row: 3 / 5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 24px;
+}
+.confirm-list {
+  width: 178px;
+}
+.confirm-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+.ci-dot { width: 15px; height: 15px; border-radius: 50%; flex: none; }
+.ci-name { font-size: 15px; font-weight: 700; flex: 1; }
+.ci-min { font-size: 10px; font-weight: 700; color: var(--text-secondary); }
+.confirm-total {
+  text-align: center;
+  font-size: 16px;
+  font-weight: 700;
+  margin: 14px 0 0;
+}
+.start-btn {
+  display: block;
+  margin: 46px auto 0;
+  width: 110px;
+  height: 45px;
+  border: none;
+  border-radius: 999px;
+  background: #2b78d7;
+  color: #fff;
+  font-size: 32px;
+  font-weight: 700;
+  line-height: 1;
+}
+.rethink-btn {
+  display: block;
+  margin: 16px auto 0;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+/* 确认之后当天锁定：另一个计划的按钮直接不显示 ——
+   反正也不能点，留着只会让人想去点。
+   剩下的这个按钮只显示计划字母，居中矩形（Figma Ver.1.0.2） */
+.split-switch.locked { justify-content: center; }
+.split-switch.locked button:not(.active) { display: none; }
+.split-switch.locked button.active {
+  flex: 0 0 auto;
+  min-width: 121px;
+  height: 37px;
+  border-radius: 7px;
+  padding: 2px 0;
+  font-size: 24px;
+  font-weight: 400;
+}
+
+/* ---- 训练页头部（Figma 21:171）：大写计划字母 + 日期/时间叠放 ---- */
+#session-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 3px;
+  /* 新稿（25:7 调整后）：字母在内容边距处（x41），不外伸 */
+  margin-left: 0;
+  /* 它在 flex 列里，空间紧时会被压缩——头部信息绝不允许被裁 */
+  flex: none;
+}
+#session-head:empty { display: none; }
+.head-letter {
+  font-size: 48px;
+  font-weight: 700;
+  line-height: 1;
+}
+.head-dt {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding-top: 3px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.head-dt span { font-size: 14px; font-weight: 600; line-height: 1.2; }
+.head-dt b { font-size: 24px; font-weight: 600; line-height: 1.2; }
+
+/* 提前结束训练的确认弹窗文字 */
+.finish-confirm-text {
+  font-size: 22px;
+  font-weight: 600;
+  text-align: center;
+  line-height: 1.6;
+  margin-bottom: 8px;
+  padding: 0 10px;
+}
+#finish-confirm .pill.wide { max-width: 260px; }
+
+/* 纯图标底部栏（重训独立版，Figma Ver.1.0.2） */
+.tab-bar.icons-only button { padding: 14px 4px 12px; }
+.tab-bar.icons-only .tab-icon { font-size: 32px; }
+
+/* ---- 历史与分析页 ---- */
+.hchart {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 12px 8px;
+  margin-bottom: 14px;
+}
+.hchart-legend {
+  display: flex;
+  gap: 14px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+.hchart-legend .dot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 3px;
+  margin-right: 4px;
+}
+.hchart-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  height: 110px;
+}
+.hbar-col {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+}
+.hbar { width: 100%; max-width: 22px; border-radius: 4px 4px 0 0; }
+.hbar-col span {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.h-day {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 11px 13px;
+  margin-bottom: 10px;
+}
+.h-day-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-variant-numeric: tabular-nums;
+}
+.h-day-head b { font-size: 15px; }
+.h-split {
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  background: var(--series-blue);
+}
+.h-split.B { background: var(--series-aqua); }
+.h-vol { margin-left: auto; font-size: 12px; color: var(--text-secondary); }
+.h-ex {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 4px 0;
+  font-size: 13px;
+  border-top: 1px solid var(--gridline);
+}
+.h-ex .h-sets { color: var(--text-secondary); font-variant-numeric: tabular-nums; white-space: nowrap; }

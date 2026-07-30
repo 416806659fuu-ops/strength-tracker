@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>重训记录</title>
+<meta name="theme-color" content="#1c5cab">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="重训记录">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="manifest" href="manifest.json">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="sticky-top">
+  <header class="page-header">
+    <h1 id="page-title">重训记录</h1>
+  </header>
+  <div class="save-bar" id="save-bar">
+    <span id="save-status"></span>
+    <button id="save-btn">上传</button>
+  </div>
+</div>
+
+<div id="app-loading" class="app-loading">加载中…</div>
+
+<main id="app-root" style="display:none;">
+
+  <!-- 重训页 -->
+  <section class="view" data-view="strength">
+    <div class="split-switch" id="split-switch">
+      <button data-split="A">A 训练计划</button>
+      <button data-split="B">B 训练计划</button>
+    </div>
+
+    <!-- 训练模式：一屏只有当前这一组 -->
+    <div id="strength-session">
+      <div id="session-head"></div>
+      <div class="progress-bar" id="session-progress"></div>
+      <div id="session-body"></div>
+    </div>
+
+    <!-- 表单模式：补记和改错 -->
+    <div id="strength-form" style="display:none;">
+      <div class="hero-card">
+        <div class="hero-label">今日训练容量</div>
+        <div class="hero-value" id="s-hero-value">0<span class="unit">kg·次</span></div>
+        <div class="hero-sub">
+          <span>动作 <b id="s-hero-moves">0</b></span>
+          <span>组数 <b id="s-hero-sets">0</b></span>
+          <span>总次数 <b id="s-hero-reps">0</b></span>
+        </div>
+      </div>
+      <div id="exercise-cards"></div>
+      <button class="pill wide" id="back-to-session-btn" style="display:none;">返回训练模式</button>
+    </div>
+  </section>
+
+  <!-- 历史页 -->
+  <section class="view" data-view="history">
+    <div id="strength-history"></div>
+  </section>
+
+  <!-- 设置页 -->
+  <section class="view" data-view="settings">
+    <div class="settings-section">
+      <h2>数据管理</h2>
+      <button class="settings-btn" id="export-btn">导出备份（JSON）</button>
+      <label class="settings-btn" style="display:block;text-align:center;cursor:pointer;">
+        导入备份（JSON）
+        <input type="file" id="import-input" accept="application/json" style="display:none;">
+      </label>
+      <button class="settings-btn danger" id="clear-btn">清空全部数据</button>
+      <p class="settings-note">记录会先存在这台设备的浏览器本地，离线也能照常记录，长期不上传也不会丢（但清除浏览器数据会把本机记录一起清掉，长期离线期间千万别清）。点顶部的「上传」会把本机数据推送到 Google Sheet 云端，作为备份、也让其他设备能看到最新记录——攒多少天再传都可以。</p>
+    </div>
+
+    <div class="settings-section">
+      <h2>后端连接</h2>
+      <button class="settings-btn" id="reset-api-btn">重新设置后端地址/密码</button>
+      <p class="settings-note">首次在新设备/新浏览器打开时会自动问一次后端地址和密码；如果输错了或者以后换了新的 Apps Script 部署，点这个按钮重新输入。</p>
+    </div>
+  </section>
+
+</main>
+
+<!-- 训练项目编辑页：A / B 两套计划里各练什么 -->
+<div id="catalog-page" class="detail-overlay" style="display:none;">
+  <div class="detail-header">
+    <button id="catalog-back" aria-label="返回">‹</button>
+    <h2>训练项目</h2>
+  </div>
+  <div class="detail-body">
+    <div id="catalog-list"></div>
+    <div class="catalog-add">
+      <input type="text" id="catalog-new-name" placeholder="新项目名称" autocomplete="off">
+      <select id="catalog-new-split">
+        <option value="A">A 计划</option>
+        <option value="B">B 计划</option>
+      </select>
+      <button id="catalog-add-btn">+</button>
+    </div>
+    <button class="settings-btn" id="seed-catalog-btn">载入预设项目（A 计划 4 项 + B 计划 4 项）</button>
+    <p class="settings-note">点任意一行进入该项目的设置：重量、每次加减多少、热身组数、正式组数。腿部和肩背的加减幅度差别很大，所以每个项目各自设定。「归档」的项目不再出现在训练页，但历史记录还留着。</p>
+  </div>
+</div>
+
+<!-- 提前结束训练的确认弹窗（在手机界面内，不用浏览器原生 confirm） -->
+<div id="finish-confirm" class="rest-overlay" style="display:none;">
+  <div class="finish-confirm-text" id="finish-confirm-text"></div>
+  <button class="pill wide primary" id="finish-confirm-yes">确认结束</button>
+  <button class="pill wide" id="finish-confirm-no">继续训练</button>
+</div>
+
+<!-- 单个动作的详情设置页，从训练项目列表点进来 -->
+<div id="exercise-detail" class="detail-overlay" style="display:none;">
+  <div class="detail-header">
+    <button id="detail-back" aria-label="返回">‹</button>
+    <h2 id="detail-title"></h2>
+  </div>
+  <div id="detail-body" class="detail-body"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<nav class="tab-bar">
+  <button data-tab="strength" class="active"><span class="tab-icon">🏋️</span>训练</button>
+  <button data-tab="history"><span class="tab-icon">📈</span>历史</button>
+  <button data-tab="settings"><span class="tab-icon">⚙️</span>设置</button>
+</nav>
+
+<script src="app.js"></script>
+<script src="strength.js"></script>
+<script src="session.js"></script>
+<script src="settings.js"></script>
+</body>
+</html>
