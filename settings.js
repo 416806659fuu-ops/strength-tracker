@@ -4,8 +4,9 @@ function initSettings() {
   document.getElementById('import-input').addEventListener('change', importData);
   document.getElementById('clear-btn').addEventListener('click', clearData);
   document.getElementById('reset-api-btn').addEventListener('click', () => {
-    localStorage.removeItem('api_url');
-    localStorage.removeItem('api_token');
+    // 只删自己那份（键名定义在 app.js）。裸键归另外两个 app 用，不能碰
+    localStorage.removeItem(API_URL_KEY);
+    localStorage.removeItem(API_TOKEN_KEY);
     location.reload();
   });
 }

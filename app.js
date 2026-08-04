@@ -55,14 +55,46 @@ function withTimeout(promise, ms, fallback) {
 // 后端是 Google Apps Script + Google Sheet。地址和密码不写死在代码里
 // （这份代码要发布到公开的 GitHub Pages，写死的话谁都能看到源码里的密码），
 // 而是第一次打开时问一次，存在这台设备的浏览器本地，以后就不用再问了。
+// 存储键必须带 strength-tracker- 前缀。三个 app（摄入管理、重训、记账）都发布在
+// 416806659fuu-ops.github.io 这同一个域名下，只是路径不同，而 localStorage 是按
+// **域名**隔离的、不看路径——三个 app 共用一份存储。原来它们都用裸的
+// 'api_url'/'api_token'，于是谁后打开谁就把别人的后端地址覆盖掉，表现就是
+// "在新设备上打开重训，后端却连到了摄入管理"。缓存那几个键早就带前缀了，
+// 唯独这两个漏了。
+const API_URL_KEY = 'strength-tracker-api-url';
+const API_TOKEN_KEY = 'strength-tracker-api-token';
+const LEGACY_API_URL_KEY = 'api_url';
+const LEGACY_API_TOKEN_KEY = 'api_token';
+
+// 从旧版本升上来的设备，配置还存在裸键里，搬一次过来免得用户重填。
+// 搬过来的值有可能本来就是别的 app 的地址（正是这个 bug 的后果），所以搬完
+// 之后如果发现连错了，用设置页的「重新设置后端」改一次即可。
+//
+// 只搬这一次，靠 MIGRATED_KEY 记住。不然"重新设置后端"会失效：那个功能是
+// 删掉已存的地址让 prompt 重新问一遍，而如果每次都无条件从裸键搬，删完立刻
+// 又被搬回来，用户永远改不掉。
+const API_MIGRATED_KEY = 'strength-tracker-api-migrated';
+function migrateLegacyApiConfig() {
+  if (localStorage.getItem(API_MIGRATED_KEY)) return;
+  localStorage.setItem(API_MIGRATED_KEY, '1');
+  if (localStorage.getItem(API_URL_KEY)) return;
+  const url = localStorage.getItem(LEGACY_API_URL_KEY);
+  const token = localStorage.getItem(LEGACY_API_TOKEN_KEY);
+  if (!url || !token) return;
+  localStorage.setItem(API_URL_KEY, url);
+  localStorage.setItem(API_TOKEN_KEY, token);
+}
+
 function getApiConfig() {
-  let url = localStorage.getItem('api_url');
-  let token = localStorage.getItem('api_token');
+  migrateLegacyApiConfig();
+  let url = localStorage.getItem(API_URL_KEY);
+  let token = localStorage.getItem(API_TOKEN_KEY);
   if (!url || !token) {
     url = (prompt('请输入后端地址（Apps Script 部署网址）：', url || '') || '').trim();
     token = (prompt('请输入密码（token）：', token || '') || '').trim();
-    if (url) localStorage.setItem('api_url', url);
-    if (token) localStorage.setItem('api_token', token);
+    // 只写带前缀的键，绝不碰那两个裸键——另外两个 app 还在用它们
+    if (url) localStorage.setItem(API_URL_KEY, url);
+    if (token) localStorage.setItem(API_TOKEN_KEY, token);
   }
   return { url, token };
 }
@@ -155,8 +187,8 @@ async function bootState() {
 // 超时要设短——封锁环境下请求往往是挂着不动而不是快速失败，
 // 不设超时的话状态栏会一直停在旧文案。
 async function refreshFromServer() {
-  const url = localStorage.getItem('api_url');
-  const token = localStorage.getItem('api_token');
+  const url = localStorage.getItem(API_URL_KEY);
+  const token = localStorage.getItem(API_TOKEN_KEY);
   if (!url || !token) {
     notConfigured = true;
     showConfigHint();
@@ -197,8 +229,9 @@ function showConfigHint() {
   status.textContent = '还没连后端，点这里设置';
   status.style.cursor = 'pointer';
   status.onclick = () => {
-    localStorage.removeItem('api_url');
-    localStorage.removeItem('api_token');
+    // 只删自己那份。裸键归另外两个 app 用，不能碰
+    localStorage.removeItem(API_URL_KEY);
+    localStorage.removeItem(API_TOKEN_KEY);
     location.reload();
   };
 }
