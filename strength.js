@@ -100,13 +100,27 @@ function lastSession(exId, beforeDate) {
   return null;
 }
 
+// 「仅本次」编辑的合并点：某天的记录如果带了 override，就用它盖掉动作库
+// 的对应字段——训练中/表单里/历史页，所有「这个动作现在怎么练」的地方
+// 都从这一个函数过，不用到处判断有没有 override。
+function effectiveExercise(ex, rec) {
+  return rec && rec.override ? Object.assign({}, ex, rec.override) : ex;
+}
+
 // ---- 计重与容量 ----
 function weightLabel(ex, w) {
   if (ex.weightMode === 'bodyweight') return '自重';
   if (w === null || w === undefined || w === '') return '—';
-  if (ex.weightMode === 'pair') return `${fmt(w)}kg×2`;
+  // 左右分计跟双侧各计一样，都是「一个数字，两侧各用这个重量」
+  if (ex.weightMode === 'pair' || ex.weightMode === 'unilateral') return `${fmt(w)}kg×2`;
   if (ex.weightMode === 'level') return `档 ${fmt(w)}`;
   return `${fmt(w)}kg`;
+}
+
+// 左右分计的组，次数字符串显示成「8/6」而不是合计的 14——一眼看出两边差多少
+function repsLabel(s) {
+  if (s.repsBySide) return `${fmt(s.repsBySide.L)}/${fmt(s.repsBySide.R)}`;
+  return fmt(s.reps);
 }
 
 // 有氧、自重和器械档位都不计入容量：
@@ -116,6 +130,12 @@ function setVolume(ex, s) {
   const reps = Number(s.reps) || 0;
   const w = Number(s.weight) || 0;
   if (ex.weightMode === 'bodyweight' || ex.weightMode === 'level') return 0;
+  if (ex.weightMode === 'unilateral') {
+    // 正常情况下用左右分开记的次数算；没有 repsBySide 的老数据/手填数据，
+    // 退回跟 pair 一样的公式兜底
+    if (s.repsBySide) return w * ((Number(s.repsBySide.L) || 0) + (Number(s.repsBySide.R) || 0));
+    return w * 2 * reps;
+  }
   if (ex.weightMode === 'pair') return w * 2 * reps;
   return w * reps;
 }
@@ -125,8 +145,9 @@ function dayTotals(day) {
   let sets = 0;
   let reps = 0;
   day.exercises.forEach((rec) => {
-    const ex = exerciseById(rec.exerciseId);
-    if (!ex) return;
+    const rawEx = exerciseById(rec.exerciseId);
+    if (!rawEx) return;
+    const ex = effectiveExercise(rawEx, rec);
     // 有氧记录没有 sets，只有 durationSec
     (rec.sets || []).forEach((s) => {
       volume += setVolume(ex, s);
@@ -187,6 +208,11 @@ function initStrength() {
   const container = document.getElementById('exercise-cards');
 
   container.addEventListener('click', (e) => {
+    const editBtn = e.target.closest('.exercise-edit-btn');
+    if (editBtn) {
+      openExerciseDetail(editBtn.dataset.ex, { dayKey: strengthDate });
+      return;
+    }
     const delBtn = e.target.closest('.set-del');
     if (delBtn) {
       const day = sEnsureDay(strengthDate);
@@ -246,16 +272,33 @@ function updateTagButton(exId) {
 }
 
 function addSet(exId) {
-  const ex = exerciseById(exId);
-  if (!ex) return;
+  const rawEx = exerciseById(exId);
+  if (!rawEx) return;
+  const day = sEnsureDay(strengthDate);
+  const ex = effectiveExercise(rawEx, recordFor(day, exId));
   const card = document.querySelector(`.exercise-card[data-ex="${exId}"]`);
   const repsInput = card.querySelector('.set-reps');
   const weightInput = card.querySelector('.set-weight');
 
-  const reps = evalCalExpr(repsInput.value);
-  if (reps === null || reps <= 0) {
-    repsInput.focus();
-    return;
+  // 左右分计：补记框里直接填「左/右」，比如 8/6
+  let reps;
+  let repsBySide;
+  if (ex.weightMode === 'unilateral') {
+    const m = String(repsInput.value).trim().match(/^(\d+(?:\.\d+)?)\s*[\/,，]\s*(\d+(?:\.\d+)?)$/);
+    const L = m ? Number(m[1]) : NaN;
+    const R = m ? Number(m[2]) : NaN;
+    if (!m || (!(L > 0) && !(R > 0))) {
+      repsInput.focus();
+      return;
+    }
+    repsBySide = { L: L || 0, R: R || 0 };
+    reps = repsBySide.L + repsBySide.R;
+  } else {
+    reps = evalCalExpr(repsInput.value);
+    if (reps === null || reps <= 0) {
+      repsInput.focus();
+      return;
+    }
   }
   // 自重动作没有重量输入框
   const weight = ex.weightMode === 'bodyweight' ? null : evalCalExpr(weightInput ? weightInput.value : '');
@@ -264,10 +307,9 @@ function addSet(exId) {
     return;
   }
 
-  const day = sEnsureDay(strengthDate);
   const rec = ensureRecord(day, exId);
   const tag = pendingTag[exId] ?? null;
-  rec.sets.push({ weight, reps, tags: tag ? [tag] : [] });
+  rec.sets.push(Object.assign({ weight, reps, tags: tag ? [tag] : [] }, repsBySide ? { repsBySide } : null));
   markDirty();
 
   pendingTag[exId] = null;
@@ -334,7 +376,7 @@ function renderSetRow(ex, s, i) {
       <span class="set-idx">${i + 1}</span>
       <span class="set-weight-label">${weightLabel(ex, s.weight)}</span>
       <span class="set-x">×</span>
-      <span class="set-reps-label">${fmt(s.reps)}</span>
+      <span class="set-reps-label">${repsLabel(s)}</span>
       ${tagChip}
       <button class="set-del" data-ex="${esc(ex.id)}" data-idx="${i}" aria-label="删除这一组">&times;</button>
     </div>`;
@@ -349,6 +391,7 @@ function renderCardioCard(ex, day) {
     <div class="exercise-card" data-ex="${esc(ex.id)}">
       <div class="exercise-head">
         <span class="exercise-name">${esc(ex.name)}</span>
+        <button class="exercise-edit-btn" data-ex="${esc(ex.id)}" aria-label="编辑这个动作">✎</button>
         <span class="exercise-summary">${mins ? mins + ' min' : ''}</span>
       </div>
       <div class="last-session muted">计划 ${planned} 分钟有氧</div>
@@ -360,9 +403,10 @@ function renderCardioCard(ex, day) {
     </div>`;
 }
 
-function renderExerciseCard(ex, day) {
-  if (isCardio(ex)) return renderCardioCard(ex, day);
-  const rec = recordFor(day, ex.id);
+function renderExerciseCard(rawEx, day) {
+  if (isCardio(rawEx)) return renderCardioCard(rawEx, day);
+  const rec = recordFor(day, rawEx.id);
+  const ex = effectiveExercise(rawEx, rec); // 今天有「仅本次」override 就用它
   const sets = rec ? rec.sets : [];
   const prev = lastSession(ex.id, strengthDate);
 
@@ -376,7 +420,7 @@ function renderExerciseCard(ex, day) {
     : '';
 
   const prevHtml = prev
-    ? `<div class="last-session">上次 ${prev.date.slice(5)}：${prev.sets.map((s) => fmt(s.reps)).join(' / ')}</div>`
+    ? `<div class="last-session">上次 ${prev.date.slice(5)}：${prev.sets.map((s) => repsLabel(s)).join(' / ')}</div>`
     : '<div class="last-session muted">这是第一次记录</div>';
 
   const defW = defaultWeightFor(ex, rec);
@@ -390,6 +434,7 @@ function renderExerciseCard(ex, day) {
     <div class="exercise-card" data-ex="${esc(ex.id)}">
       <div class="exercise-head">
         <span class="exercise-name">${esc(ex.name)}</span>
+        <button class="exercise-edit-btn" data-ex="${esc(ex.id)}" aria-label="编辑这个动作">✎</button>
         <span class="exercise-summary">${summary}</span>
       </div>
       ${prevHtml}
@@ -397,7 +442,7 @@ function renderExerciseCard(ex, day) {
       <div class="add-row">
         <button class="tag-toggle" data-ex="${esc(ex.id)}">● 正式</button>
         ${weightInput}
-        <input class="set-reps" type="text" inputmode="numeric" autocomplete="off" spellcheck="false" placeholder="次数">
+        <input class="set-reps" type="text" inputmode="${ex.weightMode === 'unilateral' ? 'text' : 'numeric'}" autocomplete="off" spellcheck="false" placeholder="${ex.weightMode === 'unilateral' ? '左/右，如 8/6' : '次数'}">
         <button class="set-add" data-ex="${esc(ex.id)}">+</button>
       </div>
     </div>`;
@@ -488,6 +533,7 @@ function renderStrengthForm(day) {
 const WEIGHT_MODES = [
   { key: 'single', label: '单一重量', hint: '杠铃、史密斯机，一个数字' },
   { key: 'pair', label: '双侧各计', hint: '一对哑铃，各 4kg 就填 4' },
+  { key: 'unilateral', label: '左右分计', hint: '先记左边再记右边，比如保加利亚单腿蹲最后一组两边次数不一样' },
   { key: 'level', label: '器械档位', hint: '配重片上的刻度，不是公斤' },
   { key: 'bodyweight', label: '自重', hint: '不加负重' },
 ];
@@ -495,7 +541,7 @@ const WEIGHT_MODES = [
 // 你现在真正在练的：A 计划练腿 4 项，B 计划胸背 3 项 + 爬坡走有氧。顺序固定。
 const SEED_CATALOG = [
   { name: '传统硬拉', split: 'A', kind: 'strength', weightMode: 'single', weight: 40, step: 2.5, warmupSets: 1, workSets: 4 },
-  { name: '保加利亚单腿蹲', split: 'A', kind: 'strength', weightMode: 'pair', weight: 4, step: 1, warmupSets: 0, workSets: 4 },
+  { name: '保加利亚单腿蹲', split: 'A', kind: 'strength', weightMode: 'unilateral', weight: 4, step: 1, warmupSets: 0, workSets: 4 },
   { name: '侧平举', split: 'A', kind: 'strength', weightMode: 'pair', weight: 4, step: 1, warmupSets: 0, workSets: 4 },
   { name: '肩背中束面拉', split: 'A', kind: 'strength', weightMode: 'level', weight: 18.1, levels: [14.7, 16.97, 18.1], warmupSets: 0, workSets: 4 },
   { name: '卧推', split: 'B', kind: 'strength', weightMode: 'single', weight: 20, step: 2.5, warmupSets: 1, workSets: 4 },
@@ -588,9 +634,16 @@ function moveExercise(exId, delta) {
 
 // ---- 动作详情页（全屏覆盖层）----
 let detailExId = null;
+// 从训练/表单里带着 dayKey 进来时，才有「仅本次 / 永久保存」的选择；
+// 从设置→动作库直接点进来的（dayKey 为空）只有永久保存这一种概念，
+// 界面上完全不出现这个切换，行为跟原来一样。
+let detailDayKey = null;
+let detailOnce = false;
 
-function openExerciseDetail(exId) {
+function openExerciseDetail(exId, ctx) {
   detailExId = exId;
+  detailDayKey = (ctx && ctx.dayKey) || null;
+  detailOnce = !!detailDayKey; // 训练中点进来的默认先给「仅本次」，符合大多数场景
   document.getElementById('exercise-detail').style.display = 'block';
   document.body.style.overflow = 'hidden';
   renderExerciseDetail();
@@ -598,9 +651,24 @@ function openExerciseDetail(exId) {
 
 function closeExerciseDetail() {
   detailExId = null;
+  detailDayKey = null;
+  detailOnce = false;
   document.getElementById('exercise-detail').style.display = 'none';
   document.body.style.overflow = '';
   renderCatalog();
+  // 训练页可能因为这次编辑（组数、重量……）需要立刻重画，不等下次切 tab
+  if (window.renderStrength) window.renderStrength();
+}
+
+// 编辑写去哪：仅本次模式写进当天记录的 override，否则跟原来一样直接改目录
+function detailWriteTarget() {
+  if (detailDayKey && detailOnce) {
+    const day = sEnsureDay(detailDayKey);
+    const rec = ensureRecord(day, detailExId);
+    if (!rec.override) rec.override = {};
+    return rec.override;
+  }
+  return exerciseById(detailExId);
 }
 
 function detailField(label, hint, inner) {
@@ -621,11 +689,15 @@ function setsSelect(cls, value, max) {
 }
 
 function renderExerciseDetail() {
-  const ex = exerciseById(detailExId);
-  if (!ex) {
+  const rawEx = exerciseById(detailExId);
+  if (!rawEx) {
     closeExerciseDetail();
     return;
   }
+  const day = detailDayKey ? sGetDay(detailDayKey) : null;
+  const rec = day ? recordFor(day, detailExId) : null;
+  const showOnce = !!detailDayKey && detailOnce; // 当前是不是在编「仅本次」的那份
+  const ex = showOnce ? effectiveExercise(rawEx, rec) : rawEx;
   const body = document.getElementById('detail-body');
   const cardio = isCardio(ex);
 
@@ -664,17 +736,34 @@ function renderExerciseDetail() {
     `<input class="d-duration" type="text" inputmode="numeric" value="${ex.durationMin ?? 20}">`
   );
 
-  const used = usageCount(ex.id);
+  const used = usageCount(rawEx.id);
   const usedNote = used > 0 ? `已经在 ${used} 天的记录里出现过，不能删除，只能归档。` : '还没有任何记录，可以直接删除。';
 
-  body.innerHTML = `
-    ${detailField('名称', '', `<input class="d-name" type="text" value="${esc(ex.name)}">`)}
+  // 只有从训练/表单带着 dayKey 进来才有这个切换；从设置→动作库直接进来的
+  // 没有「今天」这个概念，行为跟原来一样——全部当永久保存，不显示切换。
+  const scopeToggle = detailDayKey
+    ? `
+    <div class="detail-field detail-scope">
+      <div class="pill-row">
+        <button class="pill scope-btn${detailOnce ? ' active' : ''}" data-scope="once">仅本次</button>
+        <button class="pill scope-btn${!detailOnce ? ' active' : ''}" data-scope="permanent">永久保存</button>
+      </div>
+      <p class="detail-hint">${detailOnce ? '改动只影响今天的记录，动作库里的默认设置不会变。' : '改动会直接写进动作库，以后每次训练都用新设置。'}</p>
+      ${showOnce && rec && rec.override ? '<button class="settings-btn" id="d-reset-override">恢复今日默认设置</button>' : ''}
+    </div>`
+    : '';
+
+  // 名称/计划归属/类型/归档/删除都是目录的身份字段，「仅本次」模式下没有意义，不显示
+  const identityBlock = showOnce
+    ? ''
+    : `
+    ${detailField('名称', '', `<input class="d-name" type="text" value="${esc(rawEx.name)}">`)}
     ${detailField(
       '属于哪套计划',
       '',
       `<div class="pill-row">
-        <button class="pill split-btn${ex.split === 'A' ? ' active' : ''}" data-split="A">A 计划（腿）</button>
-        <button class="pill split-btn${ex.split === 'B' ? ' active' : ''}" data-split="B">B 计划（胸背）</button>
+        <button class="pill split-btn${rawEx.split === 'A' ? ' active' : ''}" data-split="A">A 计划（腿）</button>
+        <button class="pill split-btn${rawEx.split === 'B' ? ' active' : ''}" data-split="B">B 计划（胸背）</button>
       </div>`
     )}
     ${detailField(
@@ -684,16 +773,24 @@ function renderExerciseDetail() {
         <button class="pill kind-btn${!cardio ? ' active' : ''}" data-kind="strength">力量</button>
         <button class="pill kind-btn${cardio ? ' active' : ''}" data-kind="cardio">有氧</button>
       </div>`
-    )}
-    ${cardio ? cardioBlock : strengthBlock}
+    )}`;
 
+  const dangerBlock = showOnce
+    ? ''
+    : `
     <div class="detail-danger">
       <p class="detail-hint">${usedNote}</p>
-      <button class="settings-btn" id="d-archive">${ex.archived ? '取消归档' : '归档（不再出现在训练页）'}</button>
+      <button class="settings-btn" id="d-archive">${rawEx.archived ? '取消归档' : '归档（不再出现在训练页）'}</button>
       <button class="settings-btn danger" id="d-delete"${used > 0 ? ' disabled' : ''}>删除这个动作</button>
     </div>`;
 
-  document.getElementById('detail-title').textContent = ex.name;
+  body.innerHTML = `
+    ${scopeToggle}
+    ${identityBlock}
+    ${cardio ? cardioBlock : strengthBlock}
+    ${dangerBlock}`;
+
+  document.getElementById('detail-title').textContent = rawEx.name;
 }
 
 function parseLevels(raw) {
@@ -714,10 +811,25 @@ function initExerciseDetail() {
     const ex = exerciseById(detailExId);
     if (!ex) return;
 
+    const scopeBtn = e.target.closest('.scope-btn');
+    if (scopeBtn) {
+      detailOnce = scopeBtn.dataset.scope === 'once';
+      renderExerciseDetail();
+      return;
+    }
+    if (e.target.id === 'd-reset-override') {
+      const day = sGetDay(detailDayKey);
+      const rec = recordFor(day, detailExId);
+      if (rec) delete rec.override;
+      markDirty();
+      renderExerciseDetail();
+      return;
+    }
     const modeBtn = e.target.closest('.mode-btn');
     if (modeBtn) {
-      ex.weightMode = modeBtn.dataset.mode;
-      if (ex.weightMode === 'level' && !ex.levels) ex.levels = [];
+      const target = detailWriteTarget();
+      target.weightMode = modeBtn.dataset.mode;
+      if (target.weightMode === 'level' && !target.levels) target.levels = [];
       markDirty();
       renderExerciseDetail();
       return;
@@ -767,26 +879,33 @@ function initExerciseDetail() {
     if (!ex) return;
     const t = e.target;
 
+    // 名称是目录的身份字段，「仅本次」模式下这个输入框根本不会渲染出来，
+    // 不需要判断 target——能走到这个分支就一定是永久模式
     if (t.classList.contains('d-name')) {
       ex.name = t.value.trim() || ex.name;
       document.getElementById('detail-title').textContent = ex.name;
-    } else if (t.classList.contains('d-weight')) {
-      ex.weight = evalCalExpr(t.value);
+      markDirty();
+      return;
+    }
+
+    const target = detailWriteTarget();
+    if (t.classList.contains('d-weight')) {
+      target.weight = evalCalExpr(t.value);
     } else if (t.classList.contains('d-step')) {
       const v = evalCalExpr(t.value);
-      ex.step = v && v > 0 ? v : 2.5;
-      t.value = ex.step;
+      target.step = v && v > 0 ? v : 2.5;
+      t.value = target.step;
     } else if (t.classList.contains('d-levels')) {
-      ex.levels = parseLevels(t.value);
-      t.value = ex.levels.join(', ');
+      target.levels = parseLevels(t.value);
+      t.value = target.levels.join(', ');
     } else if (t.classList.contains('d-warmup')) {
-      ex.warmupSets = Number(t.value);
+      target.warmupSets = Number(t.value);
     } else if (t.classList.contains('d-work')) {
-      ex.workSets = Number(t.value);
+      target.workSets = Number(t.value);
     } else if (t.classList.contains('d-duration')) {
       const v = evalCalExpr(t.value);
-      ex.durationMin = v && v > 0 ? Math.round(v) : 20;
-      t.value = ex.durationMin;
+      target.durationMin = v && v > 0 ? Math.round(v) : 20;
+      t.value = target.durationMin;
     }
     markDirty();
   });
@@ -920,14 +1039,15 @@ function renderStrengthHistory() {
     .map(([d, rec]) => {
       const rows = (rec.exercises || [])
         .map((r) => {
-          const ex = exerciseById(r.exerciseId);
-          if (!ex) return '';
+          const rawEx = exerciseById(r.exerciseId);
+          if (!rawEx) return '';
+          const ex = effectiveExercise(rawEx, r);
           if (isCardio(ex)) {
             return `<div class="h-ex"><span>${esc(ex.name)}</span><span class="h-sets">${Math.round((r.durationSec || 0) / 60)} min</span></div>`;
           }
           const sets = r.sets || [];
           if (!sets.length) return '';
-          const reps = sets.map((x) => fmt(x.reps)).join('/');
+          const reps = sets.map((x) => repsLabel(x)).join(' / ');
           const w = weightLabel(ex, sets[sets.length - 1].weight);
           return `<div class="h-ex"><span>${esc(ex.name)}</span><span class="h-sets">${w} · ${reps}</span></div>`;
         })

@@ -78,6 +78,14 @@
     </div>
 
     <div class="settings-section">
+      <h2>训练记录管理</h2>
+      <button class="settings-btn" id="restart-plan-btn">重新选择今日计划</button>
+      <p class="settings-note">今天已经记录的组不会动，只是重新弹一次 A/B 选择——用于今天想再练一轮的情况，选完新计划会接着练还没做完的部分。</p>
+      <button class="settings-btn danger" id="restart-wipe-btn">清空今天的记录，重新开始</button>
+      <p class="settings-note">今天记录的所有组都会被清空，回到「今天练什么」的选择页——用于记错了/误记了空记录，想整个重来。</p>
+    </div>
+
+    <div class="settings-section">
       <h2>后端连接</h2>
       <button class="settings-btn" id="reset-api-btn">重新设置后端地址/密码</button>
       <p class="settings-note">首次在新设备/新浏览器打开时会自动问一次后端地址和密码；如果输错了或者以后换了新的 Apps Script 部署，点这个按钮重新输入。</p>
@@ -112,6 +120,13 @@
   <div class="finish-confirm-text" id="finish-confirm-text"></div>
   <button class="pill wide primary" id="finish-confirm-yes">确认结束</button>
   <button class="pill wide" id="finish-confirm-no">继续训练</button>
+</div>
+
+<!-- 清空今天记录的二次确认弹窗，跟「提前结束训练」同一套样式 -->
+<div id="restart-confirm" class="rest-overlay" style="display:none;">
+  <div class="finish-confirm-text">今天已经记录的组会被全部清空，且无法恢复，确定重新开始吗？</div>
+  <button class="pill wide primary" id="restart-confirm-yes">确认清空</button>
+  <button class="pill wide" id="restart-confirm-no">再想想</button>
 </div>
 
 <!-- 单个动作的详情设置页，从训练项目列表点进来 -->

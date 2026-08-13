@@ -20,9 +20,15 @@ const EXERCISE_COLORS = ['#d68b41', '#7bc865', '#6595c8', '#d94b4f', '#1baf7a'];
 
 let sessionWeight = null; // 当前组的重量，随 −/+ 变化
 let sessionReps = null; // 滚轮当前停在哪个数
+// 左右分计：一个转轮先记左边再记右边，两边都读完才算一组。
+// unilateralStep 记着当前在记哪一侧，sessionRepsL 存左边已经确认的次数。
+let unilateralStep = 'L';
+let sessionRepsL = null;
+let lastSessionPosKey = null; // 判断 renderSession 是不是移到了新的一组，是才把 unilateralStep 重置回左边
 let restEndAt = null; // 倒计时结束时刻（毫秒时间戳）
 let restTotal = 0; // 这次休息一共多少秒，用来画圆环
 let restConfirms = false; // 这次休息结束后要不要推进到下一组
+let restZeroReached = false; // 倒计时已经归零，等用户主动点一下才真正推进/恢复
 let restTimer = null;
 let wakeLock = null;
 let audioCtx = null;
@@ -39,8 +45,9 @@ function isWarmupIdx(ex, setIdx) {
 }
 
 function sessionExercises(day) {
-  return visibleExercises(day).map((ex) => {
-    const rec = recordFor(day, ex.id);
+  return visibleExercises(day).map((rawEx) => {
+    const rec = recordFor(day, rawEx.id);
+    const ex = effectiveExercise(rawEx, rec); // 今天有「仅本次」override 就用它
     const done = isCardio(ex)
       ? rec && rec.durationSec
         ? 1
@@ -71,11 +78,20 @@ function restSecondsAfter(list, exIdx, setIdx) {
   return hasNext ? rest.betweenExercises : 0;
 }
 
-// 滚轮进入一组时停在哪：优先用上次同一组的次数
-function defaultRepsFor(ex, setIdx, rec) {
+// 滚轮进入一组时停在哪：优先用上次同一组的次数。
+// side 传了（左右分计用）就优先找那一侧的历史次数，找不到分侧数据的老记录退回合计数。
+function defaultRepsFor(ex, setIdx, rec, side) {
   const prev = lastSession(ex.id, strengthDate);
-  if (prev && prev.sets[setIdx] != null) return Number(prev.sets[setIdx].reps) || 10;
-  if (rec && rec.sets.length) return Number(rec.sets[rec.sets.length - 1].reps) || 10;
+  if (prev && prev.sets[setIdx] != null) {
+    const s = prev.sets[setIdx];
+    if (side && s.repsBySide) return Number(s.repsBySide[side]) || 10;
+    return Number(s.reps) || 10;
+  }
+  if (rec && rec.sets.length) {
+    const s = rec.sets[rec.sets.length - 1];
+    if (side && s.repsBySide) return Number(s.repsBySide[side]) || 10;
+    return Number(s.reps) || 10;
+  }
   return 10;
 }
 
@@ -187,8 +203,11 @@ function startRest(seconds, confirms) {
   restTotal = seconds;
   restEndAt = Date.now() + seconds * 1000;
   restConfirms = confirms;
+  restZeroReached = false;
   acquireWakeLock();
   zone.classList.add('resting');
+  zone.classList.remove('rest-done');
+  setRestHint('点圆环可以提前结束休息');
   // 暂停型休息（不推进）才显示「提前结束训练」——想收工先按暂停缓一缓再决定
   zone.classList.toggle('adjust', !confirms);
   tickRest();
@@ -200,18 +219,36 @@ function remainingSeconds() {
   return Math.max(0, Math.ceil((restEndAt - Date.now()) / 1000));
 }
 
+function setRestHint(text) {
+  const hint = document.querySelector('.rest-hint');
+  if (hint) hint.textContent = text;
+}
+
 function tickRest() {
   const left = remainingSeconds();
   const valueEl = document.getElementById('rest-value');
   const circle = document.getElementById('rest-ring-fg');
   if (!valueEl || !circle) return;
-  valueEl.textContent = left;
   const ratio = restTotal > 0 ? left / restTotal : 0;
   const CIRC = 2 * Math.PI * 90;
   // 负偏移让缺口从另一端收 —— 顺时针减少
   circle.style.strokeDashoffset = String(-CIRC * (1 - ratio));
 
-  if (left <= 0) finishRest();
+  if (left <= 0) {
+    valueEl.textContent = '✓';
+    // 只在归零这一刻响一次、停表，剩下的交给用户主动点一下 —— 不再自动推进/恢复
+    if (!restZeroReached) {
+      restZeroReached = true;
+      clearInterval(restTimer);
+      restTimer = null;
+      beep();
+      const zone = document.getElementById('wheel-zone');
+      if (zone) zone.classList.add('rest-done');
+      setRestHint(restConfirms ? '点圆环继续下一组' : '点圆环恢复');
+    }
+    return;
+  }
+  valueEl.textContent = left;
 }
 
 function finishRest() {
@@ -220,13 +257,18 @@ function finishRest() {
   restEndAt = null;
   releaseWakeLock();
   const zone = document.getElementById('wheel-zone');
-  if (zone) zone.classList.remove('resting');
-  beep();
+  if (zone) {
+    zone.classList.remove('resting');
+    zone.classList.remove('rest-done');
+  }
+  // 归零那一刻已经响过一次了；这里响铃只服务「没到零就提前点掉」的情况
+  if (!restZeroReached) beep();
+  restZeroReached = false;
   if (restConfirms) advanceAfterRest();
   restConfirms = false;
 }
 
-// 提前结束休息（点圆环）
+// 提前结束休息（点圆环）—— 归零前点是提前结束，归零后点是确认继续/恢复
 function skipRest() {
   finishRest();
 }
@@ -347,15 +389,25 @@ function confirmSet() {
 
   const item = list[pos.exIdx];
   const ex = item.ex;
+
+  // 左右分计先记左边：这一下点确认只是把左边的次数存住、转轮切到右边，
+  // 还没真的算完这一组——不写记录、不推进、不进休息
+  if (ex.weightMode === 'unilateral' && unilateralStep === 'L') {
+    sessionRepsL = sessionReps;
+    unilateralStep = 'R';
+    renderSession();
+    return;
+  }
+
   const rec = ensureRecord(day, ex.id);
   const warmup = isWarmupIdx(ex, pos.setIdx);
-
-  rec.sets.push({
-    weight: sessionWeight,
-    reps: sessionReps,
-    tags: [],
-    warmup,
-  });
+  const setEntry = { weight: sessionWeight, reps: sessionReps, tags: [], warmup };
+  if (ex.weightMode === 'unilateral') {
+    setEntry.reps = sessionRepsL + sessionReps;
+    setEntry.repsBySide = { L: sessionRepsL, R: sessionReps };
+    unilateralStep = 'L'; // 这一组记完了，下一组从左边重新开始
+  }
+  rec.sets.push(setEntry);
   markDirty();
 
   const seconds = restSecondsAfter(list, pos.exIdx, pos.setIdx);
@@ -388,12 +440,25 @@ function finishDay() {
   document.getElementById('finish-confirm').style.display = 'flex';
 }
 
-function reallyFinishDay() {
-  document.getElementById('finish-confirm').style.display = 'none';
+// 停表、清倒计时状态、释放屏幕常亮锁——「提前结束训练」和设置页的
+// 「重新开始记录」共用这套收尾，别再各写一份容易漏字段。
+function clearRestState() {
   clearInterval(restTimer);
   restTimer = null;
   restEndAt = null;
+  restZeroReached = false;
   releaseWakeLock();
+  const zone = document.getElementById('wheel-zone');
+  if (zone) {
+    zone.classList.remove('resting');
+    zone.classList.remove('rest-done');
+    zone.classList.remove('adjust');
+  }
+}
+
+function reallyFinishDay() {
+  document.getElementById('finish-confirm').style.display = 'none';
+  clearRestState();
   window.showStrengthForm(true);
   showToast('训练已结束');
 }
@@ -561,7 +626,8 @@ function renderDots(item, curSetIdx, color) {
     if (done) {
       cls += ' done';
       style = `style="background:${color}"`;
-      label = item.rec.sets[i].reps;
+      label = repsLabel(item.rec.sets[i]);
+      if (item.rec.sets[i].repsBySide) cls += ' set-dot-split'; // "8/6" 比单个数字长，字号得缩一点才塞得下
     } else {
       cls += ' pending';
     }
@@ -589,11 +655,10 @@ function renderSession() {
   const body = document.getElementById('session-body');
 
   // 完整的一天从选计划开始：选 A/B → 确认页 → 开始。
-  // 这两个画面不显示底部栏（Figma 评论）；项目库为空时例外，不然进不了设置。
+  // 底部栏（训练/历史/设置）全程常驻——选计划这一步也要能点到「设置」，
+  // 才够得着「重新开始记录」这个入口（在设置页里，见 settings.js）。
   const rawDay = state.strength.days[strengthDate];
-  const tabBar = document.querySelector('.tab-bar');
   const confirmed = rawDay && rawDay.confirmed;
-  if (tabBar) tabBar.style.display = !confirmed && state.strength.catalog.length ? 'none' : '';
   if (!confirmed) {
     if (pendingSplit) renderPlanConfirm(body);
     else renderPlanChooser(body);
@@ -627,6 +692,13 @@ function renderSession() {
   const color = EXERCISE_COLORS[pos.exIdx % EXERCISE_COLORS.length];
   renderProgressBar(list, pos.exIdx);
 
+  // 真的换了一组（不是同一组内左→右的过渡重绘）才把左右分计的进度打回左边
+  const posKey = `${pos.exIdx}:${pos.setIdx}`;
+  if (posKey !== lastSessionPosKey) {
+    unilateralStep = 'L';
+  }
+  lastSessionPosKey = posKey;
+
   // 有氧：一个大计时盘，不是滚轮
   if (isCardio(ex)) {
     const mins = ex.durationMin ?? 20;
@@ -640,7 +712,10 @@ function renderSession() {
         </div>
       </div>
       <div class="info-zone">
-        <div class="session-exercise-name">${esc(ex.name)}</div>
+        <div class="name-block">
+          <span class="session-exercise-name">${esc(ex.name)}</span>
+          <button class="cue-btn session-edit-exercise-btn" data-ex="${esc(ex.id)}" aria-label="编辑这个动作">✎ 编辑</button>
+        </div>
         <div class="prev-row"><span class="prev-empty">计划 ${mins} 分钟有氧</span></div>
         <button class="finish-btn" id="btn-finish-day">提前结束</button>
       </div>`;
@@ -648,9 +723,13 @@ function renderSession() {
   }
 
   sessionWeight = defaultSessionWeight(ex, item.rec);
-  const reps = defaultRepsFor(ex, pos.setIdx, item.rec);
+  const isUnilateral = ex.weightMode === 'unilateral';
+  const reps = isUnilateral ? defaultRepsFor(ex, pos.setIdx, item.rec, unilateralStep) : defaultRepsFor(ex, pos.setIdx, item.rec);
   const warm = isWarmupIdx(ex, pos.setIdx);
   const restSec = restSecondsAfter(list, pos.exIdx, pos.setIdx);
+  // 左边刚记完、还没记右边：这一下点确认只是切到右边转轮，不是真的完成这一组，
+  // 按钮不该显示休息秒数，免得以为点了就要开始休息
+  const confirmLabel = isUnilateral && unilateralStep === 'L' ? '→ 右' : restSec > 0 ? restSec + 's' : '完成';
 
   // 上次记录：只写日期 + 每组次数的圆点，不加「上次」标注（看日期就懂）
   const prev = lastSession(ex.id, strengthDate);
@@ -658,7 +737,7 @@ function renderSession() {
   if (prev) {
     const [py, pm, pd] = prev.date.split('-');
     const pdots = prev.sets
-      .map((s) => `<span class="pdot" style="background:${color}">${fmt(s.reps)}</span>`)
+      .map((s) => `<span class="pdot" style="background:${color}">${repsLabel(s)}</span>`)
       .join('');
     prevRow = `
       <div class="prev-row">
@@ -684,7 +763,7 @@ function renderSession() {
         <div class="reps-wheel" id="reps-wheel"></div>
       </div>
       <div class="rest-buttons">
-        <button class="round-btn primary" id="btn-confirm" style="background:${color}">${restSec > 0 ? restSec + 's' : '完成'}</button>
+        <button class="round-btn primary" id="btn-confirm" style="background:${color}">${confirmLabel}</button>
         <button class="round-btn pause" id="btn-adjust-rest" aria-label="调整休息"><span class="pause-glyph"></span></button>
       </div>
       <!-- 倒计时嵌在这个区块里，顺时针；颜色跟当前动作统一 -->
@@ -705,8 +784,9 @@ function renderSession() {
 
     <div class="info-zone">
       <div class="name-block">
-        <span class="session-exercise-name">${esc(ex.name)}${warm ? '<span class="warm-badge">热身</span>' : ''}</span>
+        <span class="session-exercise-name">${esc(ex.name)}${warm ? '<span class="warm-badge">热身</span>' : ''}${isUnilateral ? `<span class="side-badge">${unilateralStep === 'L' ? '左侧' : '右侧'}</span>` : ''}</span>
         <button class="cue-btn" id="btn-cues">动作要点 <span class="cue-arrow">▶</span></button>
+        <button class="cue-btn session-edit-exercise-btn" data-ex="${esc(ex.id)}" aria-label="编辑这个动作">✎ 编辑</button>
       </div>
       ${prevRow}
       <div class="weight-row">
@@ -780,6 +860,15 @@ function initSession() {
     if (e.target.closest('#rest-add-30')) {
       restEndAt += 30000;
       restTotal += 30;
+      if (restZeroReached) {
+        // 已经停表等确认了，加时间等于反悔，重新走一遍倒计时
+        restZeroReached = false;
+        const zone = document.getElementById('wheel-zone');
+        if (zone) zone.classList.remove('rest-done');
+        setRestHint('点圆环可以提前结束休息');
+        clearInterval(restTimer);
+        restTimer = setInterval(tickRest, 200);
+      }
       tickRest();
       return;
     }
@@ -803,6 +892,11 @@ function initSession() {
     }
     if (e.target.closest('#btn-cues')) {
       showToast('动作要点：下个版本做');
+      return;
+    }
+    const editBtn = e.target.closest('.session-edit-exercise-btn');
+    if (editBtn) {
+      openExerciseDetail(editBtn.dataset.ex, { dayKey: strengthDate });
       return;
     }
     if (e.target.closest('#btn-confirm')) {

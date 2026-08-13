@@ -9,6 +9,43 @@ function initSettings() {
     localStorage.removeItem(API_TOKEN_KEY);
     location.reload();
   });
+  document.getElementById('restart-plan-btn').addEventListener('click', restartTodayPlan);
+  document.getElementById('restart-wipe-btn').addEventListener('click', () => {
+    document.getElementById('restart-confirm').style.display = 'flex';
+  });
+  document.getElementById('restart-confirm-no').addEventListener('click', () => {
+    document.getElementById('restart-confirm').style.display = 'none';
+  });
+  document.getElementById('restart-confirm-yes').addEventListener('click', () => {
+    document.getElementById('restart-confirm').style.display = 'none';
+    restartTodayWipe();
+  });
+}
+
+// 「重新选择今日计划」：软重置，今天已经记的组原样保留，只是重新弹一次
+// A/B 选择——用于「今天练第二次」，选完新计划后 currentPos() 会自动跳过
+// 已经练完的动作，接着练没做完的部分，不用另外搬数据。
+function restartTodayPlan() {
+  const day = sEnsureDay(todayKey());
+  day.confirmed = false;
+  pendingSplit = null;
+  markDirty();
+  showToast('已重新打开今日计划选择');
+  if (window.renderStrength) window.renderStrength();
+}
+
+// 「清空今天的记录，重新开始」：硬重置，今天记的组全部清空——用于误记了
+// 空记录/记错了想整个重来。顺手清掉可能还在走的休息倒计时状态，
+// 跟「提前结束训练」的收尾方式一致（session.js 的 reallyFinishDay）。
+function restartTodayWipe() {
+  const day = sEnsureDay(todayKey());
+  day.confirmed = false;
+  day.exercises = [];
+  pendingSplit = null;
+  clearRestState();
+  markDirty();
+  showToast('今天的记录已清空');
+  if (window.renderStrength) window.renderStrength();
 }
 
 // 整份 state 被换掉之后（导入/清空），把每个页面都重画一遍
