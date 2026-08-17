@@ -516,37 +516,96 @@ function finishCardio(auto) {
   renderSession();
 }
 
-// ---- 滚轮 ----
-function buildWheel() {
-  const wheel = document.getElementById('reps-wheel');
-  if (wheel.dataset.built) return;
-  // 横向滚轮（Figma 25:7）：小数在左、大数在右，向左滑数字变大
-  let html = '<div class="wheel-pad"></div>';
-  for (let i = REPS_MIN; i <= REPS_MAX; i++) {
-    html += `<div class="wheel-item" data-v="${i}">${i}</div>`;
-  }
-  html += '<div class="wheel-pad"></div>';
-  wheel.innerHTML = html;
-  wheel.dataset.built = '1';
+// ---- 次数计数器 ----
+// 原来是横向滚轮，改成按住加、下滑减一：按久了没有"记录的快感"，改成
+// 蓄力式的按压——按住一小会儿（不用长按）开始跳数字，越按越快地一直跳，
+// 松手停；往下拖一下退一格。
+const HOLD_DELAY_MS = 220; // 按住多久开始跳字——要有一点"蓄力"感，但不能等太久
+const HOLD_REPEAT_MS = 130; // 之后每隔多久 +1
+const DRAG_DECREMENT_PX = 28; // 下滑超过这个距离才算"退一格"，太短容易誤触
+const MOVE_CANCEL_PX = 10; // 手指挪动超过这个距离，就不算"按住不动"了
 
-  // 音频要用户手势才能启动，第一次摸到滚轮就把它唤醒
-  wheel.addEventListener('pointerdown', primeAudio, { passive: true });
-  wheel.addEventListener('touchstart', primeAudio, { passive: true });
+let repsHoldTimer = null;
+let repsHoldInterval = null;
+let repsGestureStartX = 0;
+let repsGestureStartY = 0;
+let repsGestureMoved = false;
+let repsDragArmed = false; // 这次手势已经触发过一次"下滑减一"，同一次按压不重复减
 
-  let raf = null;
-  wheel.addEventListener('scroll', () => {
-    if (raf) return;
-    raf = requestAnimationFrame(() => {
-      raf = null;
-      const before = sessionReps;
-      updateWheelActive();
-      // 滚过一个数字，咔哒一声（像 iOS 的拨盘）
-      if (sessionReps !== before) wheelTick();
-    });
-  });
+function initRepsCounter() {
+  const el = document.getElementById('reps-wheel');
+  if (!el) return;
+  el.addEventListener('pointerdown', repsCounterPointerDown);
+  el.addEventListener('pointermove', repsCounterPointerMove);
+  el.addEventListener('pointerup', repsCounterPointerUp);
+  el.addEventListener('pointercancel', repsCounterPointerUp);
 }
 
-// 很短促的一声「咔」：高频方波 30ms 衰减
+function repsCounterPointerDown(e) {
+  if (e.button != null && e.button !== 0) return; // 鼠标只认左键；触屏没有 button 概念
+  primeAudio();
+  const el = e.currentTarget;
+  try { el.setPointerCapture(e.pointerId); } catch (err) { /* 部分浏览器不支持也无妨 */ }
+  repsGestureStartX = e.clientX;
+  repsGestureStartY = e.clientY;
+  repsGestureMoved = false;
+  repsDragArmed = false;
+  clearTimeout(repsHoldTimer);
+  clearInterval(repsHoldInterval);
+  el.classList.add('charging'); // 蓄力视觉：一个圆点从中心慢慢撑开，跟 HOLD_DELAY_MS 同步
+  repsHoldTimer = setTimeout(() => {
+    if (repsGestureMoved) return;
+    adjustReps(1);
+    repsHoldInterval = setInterval(() => adjustReps(1), HOLD_REPEAT_MS);
+  }, HOLD_DELAY_MS);
+}
+
+function repsCounterPointerMove(e) {
+  const dx = e.clientX - repsGestureStartX;
+  const dy = e.clientY - repsGestureStartY;
+  if (!repsGestureMoved && Math.hypot(dx, dy) > MOVE_CANCEL_PX) {
+    // 手指开始明显移动：取消"按住加"的判定（不然一边下滑一边还在加，会打架）
+    repsGestureMoved = true;
+    clearTimeout(repsHoldTimer);
+    clearInterval(repsHoldInterval);
+    repsHoldTimer = null;
+    repsHoldInterval = null;
+    e.currentTarget.classList.remove('charging');
+  }
+  if (repsGestureMoved && !repsDragArmed && dy > DRAG_DECREMENT_PX && Math.abs(dy) > Math.abs(dx)) {
+    repsDragArmed = true;
+    adjustReps(-1);
+  }
+}
+
+function repsCounterPointerUp(e) {
+  clearTimeout(repsHoldTimer);
+  clearInterval(repsHoldInterval);
+  repsHoldTimer = null;
+  repsHoldInterval = null;
+  e.currentTarget.classList.remove('charging');
+}
+
+function adjustReps(delta) {
+  const next = Math.max(REPS_MIN, Math.min(REPS_MAX, (sessionReps || 0) + delta));
+  if (next === sessionReps) return; // 顶/底到头了，不重复放动效
+  sessionReps = next;
+  renderRepsCounterValue(delta > 0 ? 'up' : 'down');
+  wheelTick();
+}
+
+// 数字变化后配合一下跳动的动效，光换数字不够有"记录的快感"
+function renderRepsCounterValue(bumpDir) {
+  const el = document.getElementById('reps-counter-value');
+  if (!el) return;
+  el.textContent = sessionReps;
+  if (!bumpDir) return;
+  el.classList.remove('bump-up', 'bump-down');
+  void el.offsetWidth; // 强制重排，让同一个 class 能连续触发第二次动画
+  el.classList.add(bumpDir === 'up' ? 'bump-up' : 'bump-down');
+}
+
+// 很短促的一声「咔」：高频方波 30ms 衰减，每次 +1/-1 响一下
 function wheelTick() {
   if (!audioCtx || audioCtx.state !== 'running') return;
   try {
@@ -564,37 +623,6 @@ function wheelTick() {
   } catch (e) {
     /* 没声音不影响使用 */
   }
-}
-
-// 找到最靠近滚轮中心（横向）的那一项，就是当前值
-function updateWheelActive() {
-  const wheel = document.getElementById('reps-wheel');
-  const center = wheel.scrollLeft + wheel.clientWidth / 2;
-  let best = null;
-  let bestDist = Infinity;
-  wheel.querySelectorAll('.wheel-item').forEach((el) => {
-    const mid = el.offsetLeft + el.offsetWidth / 2;
-    const dist = Math.abs(mid - center);
-    if (dist < bestDist) {
-      bestDist = dist;
-      best = el;
-    }
-  });
-  if (!best) return;
-  wheel.querySelectorAll('.wheel-item.active').forEach((el) => el.classList.remove('active'));
-  best.classList.add('active');
-  sessionReps = Number(best.dataset.v);
-}
-
-function scrollWheelTo(value, instant) {
-  const wheel = document.getElementById('reps-wheel');
-  const el = wheel.querySelector(`.wheel-item[data-v="${value}"]`);
-  if (!el) return;
-  const left = el.offsetLeft + el.offsetWidth / 2 - wheel.clientWidth / 2;
-  wheel.scrollTo({ left, behavior: instant ? 'auto' : 'smooth' });
-  sessionReps = value;
-  wheel.querySelectorAll('.wheel-item.active').forEach((x) => x.classList.remove('active'));
-  el.classList.add('active');
 }
 
 // ---- 渲染 ----
@@ -768,7 +796,10 @@ function renderSession() {
   body.innerHTML = `
     <div class="wheel-zone" id="wheel-zone">
       <div class="session-main">
-        <div class="reps-wheel" id="reps-wheel"></div>
+        <div class="reps-counter" id="reps-wheel">
+          <div class="reps-counter-value" id="reps-counter-value"></div>
+          <div class="reps-counter-hint">按住加 · 下滑减一</div>
+        </div>
       </div>
       <div class="rest-buttons">
         <button class="round-btn primary" id="btn-confirm" style="background:${color}">${confirmLabel}</button>
@@ -804,8 +835,9 @@ function renderSession() {
       </div>
     </div>`;
 
-  buildWheel();
-  scrollWheelTo(reps, true);
+  initRepsCounter();
+  sessionReps = reps;
+  renderRepsCounterValue(null); // 刚进这一组，不放动效
   renderSessionWeight();
 
   // 休息属于「正在进行的这一组」：任何原因触发的重绘（切 tab、缩放）

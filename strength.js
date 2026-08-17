@@ -195,6 +195,13 @@ function initStrength() {
     }
   });
 
+  document.getElementById('confirm-edit-btn').addEventListener('click', () => {
+    // 输入框其实是失焦/回车就存了，这里只是把当前还聚着焦、没触发 blur 的
+    // 那一个也强制提交一次，再给个明确的提示——纯粹是让人放心的确认动作
+    if (document.activeElement) document.activeElement.blur();
+    showToast(`已保存 ${viewingHistoryDate ? viewingHistoryDate.replace(/-/g, '/') : ''} 的修改`);
+  });
+
   // 历史页点某一天 = 进补记模式改那天的记录：加/删组、改计划归属，
   // 复用表单模式本来就有的这套逻辑（本来就不认「今天」，只认 strengthDate）。
   const historyRoot = document.getElementById('strength-history');
@@ -630,6 +637,10 @@ function renderStrength() {
     backBtn.textContent = '返回训练模式';
     backBtn.style.display = !useSession && isToday ? '' : 'none';
   }
+  // 改历史记录才需要这个按钮：字段本来就是失焦即存，这个按钮的作用是给一个
+  // 明确的「存好了」反馈——用户反馈过一次"输入不进去也存不上"，光是自动保存
+  // 不够让人放心，加个能主动点一下的确认动作。
+  document.getElementById('confirm-edit-btn').style.display = viewingHistoryDate ? '' : 'none';
 
   if (useSession) {
     window.renderSession();

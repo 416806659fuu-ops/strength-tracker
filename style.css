@@ -376,58 +376,47 @@ main {
   font-size: 12px;
   font-variant-numeric: tabular-nums;
 }
-.set-row .set-edit-weight,
 .set-row .set-bodyweight-label {
   color: var(--text-primary);
   font-variant-numeric: tabular-nums;
   min-width: 44px;
 }
-.set-row .set-unit-hint { flex: none; margin-left: -4px; font-size: 11px; color: var(--text-muted); }
+.set-row .set-unit-hint { flex: none; margin-left: -2px; font-size: 11px; color: var(--text-muted); }
 .set-row .set-x { color: var(--text-muted); font-size: 12px; }
-.set-row .set-edit-reps {
-  color: var(--text-primary);
-  font-variant-numeric: tabular-nums;
-  flex: 1;
-  min-width: 0;
-}
-/* 重量/次数现在是输入框：不聚焦时看起来还是纯文字，点进去才看出能改 */
+/* 重量/次数是看得出来的输入框，不是贴着文字下面一道细线——之前那种
+   「不聚焦时像纯文字」的设计反而让人不敢点，也不好点中。跟弹窗里
+   .detail-field 那批输入框同一套边框/底色语言，只是尺寸缩小到塞得进
+   这一行。 */
 .set-row .set-edit-weight,
-.set-row .set-edit-reps {
-  border: none;
-  border-bottom: 1px solid transparent;
-  background: transparent;
-  font: inherit;
-  padding: 2px 0;
-}
-.set-row .set-edit-weight:focus,
-.set-row .set-edit-reps:focus {
-  outline: none;
-  border-bottom-color: var(--series-blue);
-}
-/* 左右分计：左右各一个独立小框，不是一个框里塞「8/6」——用户老是猜不出
-   那种格式，干脆做成看得出来的两个框，跟历史页显示的「8/6」用同一个
-   斜杠分隔，一眼对得上。 */
-.set-reps-side-group { display: flex; align-items: center; flex: 1; min-width: 0; gap: 3px; }
-.set-reps-side-sep { flex: none; color: var(--text-muted); font-size: 12px; }
+.set-row .set-edit-reps,
 .set-row .set-edit-reps-l,
 .set-row .set-edit-reps-r {
   color: var(--text-primary);
   font-variant-numeric: tabular-nums;
-  flex: 1;
-  min-width: 0;
-  width: 0;
-  text-align: center;
-  border: none;
-  border-bottom: 1px solid transparent;
-  background: transparent;
+  border: 1px solid var(--border);
+  background: var(--page);
+  border-radius: 8px;
   font: inherit;
-  padding: 2px 0;
+  font-size: 15px;
+  padding: 5px 6px;
+  text-align: center;
 }
+.set-row .set-edit-weight { flex: none; min-width: 50px; }
+.set-row .set-edit-reps { flex: 1; min-width: 0; }
+.set-row .set-edit-weight:focus,
+.set-row .set-edit-reps:focus,
 .set-row .set-edit-reps-l:focus,
 .set-row .set-edit-reps-r:focus {
   outline: none;
-  border-bottom-color: var(--series-blue);
+  border-color: var(--series-blue);
 }
+/* 左右分计：左右各一个独立小框，不是一个框里塞「8/6」——用户老是猜不出
+   那种格式，干脆做成看得出来的两个框，跟历史页显示的「8/6」用同一个
+   斜杠分隔，一眼对得上。 */
+.set-reps-side-group { display: flex; align-items: center; flex: 1; min-width: 0; gap: 4px; }
+.set-reps-side-sep { flex: none; color: var(--text-muted); font-size: 12px; }
+.set-row .set-edit-reps-l,
+.set-row .set-edit-reps-r { flex: 1; min-width: 0; width: 0; }
 .set-row .set-tag { flex: none; font-size: 12px; }
 .set-empty {
   padding: 7px 0;
@@ -838,57 +827,73 @@ main {
   min-height: 160px;
   max-height: 300px;
 }
-.reps-wheel {
+/* 次数计数器：按住蓄力跳字、下滑退一格，不再是横向滚轮
+   （见 session.js 的 initRepsCounter/adjustReps）。 */
+.reps-counter {
+  position: relative;
   width: 100%;
   height: 225px;
   align-self: center;
   display: flex;
-  align-items: center;
-  overflow-x: scroll;
-  overflow-y: hidden;
-  scroll-snap-type: x mandatory;
-  -webkit-overflow-scrolling: touch; /* iOS 惯性滚动 */
-  touch-action: pan-x; /* 只吃横向拖拽 */
-  overscroll-behavior-x: contain; /* 拖到头时不要把整个页面带着滚 */
-  scrollbar-width: none;
-  -webkit-mask-image: linear-gradient(90deg, transparent, #000 18%, #000 82%, transparent);
-  mask-image: linear-gradient(90deg, transparent, #000 18%, #000 82%, transparent);
-}
-.reps-wheel::-webkit-scrollbar { display: none; }
-/* 上下占位：让第一项和最后一项也能滚到正中。
-   滚轮高度确定，所以这里的 50% 有依据 —— 半个滚轮减半个条目。 */
-.wheel-pad { width: calc(50% - 66px); height: 1px; flex: none; }
-.wheel-item {
-  width: 132px;
-  height: 100%;
-  flex: none;
-  scroll-snap-align: center;
-  display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  font-size: 64px;
-  font-weight: 800;
-  color: var(--text-muted);
-  opacity: 0.45;
-  font-variant-numeric: tabular-nums;
-  /* 两位数在 128px 字号下比格子宽：禁止换行，允许字形溢出格子
-     （设计稿里当前数字本来就压着两侧的间隙） */
-  white-space: nowrap;
-  overflow: visible;
-  /* 每个数字都强制停顿：一次滑动只走一格，不会滑过头 */
-  scroll-snap-stop: always;
-  /* 字形会溢出格子互相压：当前数字必须永远在最上层 */
+  gap: 6px;
+  touch-action: none; /* 手势全部自己接管，别让浏览器抢去当滚动/缩放 */
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  cursor: pointer;
+}
+/* 蓄力圈：按住时从中心慢慢撑开一个圆，撑满的时刻正好是开始跳字那一刻
+   （transition 时长跟 session.js 的 HOLD_DELAY_MS 对齐，改一个记得改另一个） */
+.reps-counter::before {
+  content: '';
+  position: absolute;
+  width: 210px;
+  height: 210px;
+  border-radius: 50%;
+  background: var(--series-blue-wash);
+  transform: scale(0);
+  opacity: 0;
+  pointer-events: none;
+}
+.reps-counter.charging::before {
+  transform: scale(1);
+  opacity: 1;
+  transition: transform 220ms ease-out, opacity 220ms ease-out;
+}
+.reps-counter-value {
   position: relative;
   z-index: 1;
-  transition: font-size 0.12s, opacity 0.12s;
-}
-.wheel-item.active {
   font-size: 188px;
   font-weight: 800;
   color: var(--text-primary);
-  opacity: 1;
-  z-index: 2;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
 }
+.reps-counter-hint {
+  position: relative;
+  z-index: 1;
+  font-size: 13px;
+  color: var(--text-muted);
+  transition: opacity 0.15s;
+}
+.reps-counter.charging .reps-counter-hint { opacity: 0; }
+
+/* 数字变化配一下跳动的动效——只是换数字不够有"记录的快感" */
+@keyframes reps-bump-up {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.2); }
+  100% { transform: scale(1); }
+}
+@keyframes reps-bump-down {
+  0% { transform: scale(1); }
+  40% { transform: scale(0.85); }
+  100% { transform: scale(1); }
+}
+.reps-counter-value.bump-up { animation: reps-bump-up 0.18s ease-out; }
+.reps-counter-value.bump-down { animation: reps-bump-down 0.18s ease-out; }
 
 .rest-buttons {
   position: absolute;
