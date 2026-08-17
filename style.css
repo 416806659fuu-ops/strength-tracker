@@ -339,15 +339,36 @@ main {
 .last-session.muted { color: var(--text-muted); }
 
 .set-list { margin-top: 8px; }
-.set-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 7px 0;
-  border-bottom: 1px solid var(--gridline);
-  font-size: 14px;
+
+/* ---- 滑动删除：靠原生横向滚动 + scroll-snap 实现，不用手写 touch 手势——
+   跟纵向翻页天然不会打架，松手自动吸附，比手动算 dx/dy 稳得多。
+   套两处：动作卡片里的每一组（.set-row）、历史页的每一天（.h-day）。
+   结构固定：外层 .swipe-row 负责滚动，.swipe-track 横排 [内容][删除按钮]，
+   内容 scroll-snap-align:start、删除按钮 scroll-snap-align:end。 ---- */
+.swipe-row {
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
 }
+.swipe-row::-webkit-scrollbar { display: none; }
+.swipe-track { display: flex; min-width: 100%; }
+.swipe-content { flex: none; width: 100%; min-width: 0; scroll-snap-align: start; }
+.swipe-delete-btn {
+  flex: none;
+  width: 64px;
+  scroll-snap-align: end;
+  border: none;
+  background: var(--critical);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.set-row { border-bottom: 1px solid var(--gridline); font-size: 14px; }
 .set-row:last-of-type { border-bottom: none; }
+.set-row .swipe-content { display: flex; align-items: center; gap: 8px; padding: 7px 0; }
 .set-row .set-idx {
   flex: none;
   width: 18px;
@@ -355,27 +376,35 @@ main {
   font-size: 12px;
   font-variant-numeric: tabular-nums;
 }
-.set-row .set-weight-label {
+.set-row .set-edit-weight,
+.set-row .set-bodyweight-label {
   color: var(--text-primary);
   font-variant-numeric: tabular-nums;
-  min-width: 62px;
+  min-width: 44px;
 }
+.set-row .set-unit-hint { flex: none; margin-left: -4px; font-size: 11px; color: var(--text-muted); }
 .set-row .set-x { color: var(--text-muted); font-size: 12px; }
-.set-row .set-reps-label {
+.set-row .set-edit-reps {
   color: var(--text-primary);
   font-variant-numeric: tabular-nums;
   flex: 1;
+  min-width: 0;
+}
+/* 重量/次数现在是输入框：不聚焦时看起来还是纯文字，点进去才看出能改 */
+.set-row .set-edit-weight,
+.set-row .set-edit-reps {
+  border: none;
+  border-bottom: 1px solid transparent;
+  background: transparent;
+  font: inherit;
+  padding: 2px 0;
+}
+.set-row .set-edit-weight:focus,
+.set-row .set-edit-reps:focus {
+  outline: none;
+  border-bottom-color: var(--series-blue);
 }
 .set-row .set-tag { flex: none; font-size: 12px; }
-.set-row .set-del {
-  border: none;
-  background: none;
-  color: var(--text-muted);
-  font-size: 18px;
-  line-height: 1;
-  padding: 4px 6px;
-  flex: none;
-}
 .set-empty {
   padding: 7px 0;
   font-size: 13px;
@@ -1398,11 +1427,12 @@ main {
   background: var(--surface-1);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 11px 13px;
   margin-bottom: 10px;
   cursor: pointer;
 }
-.h-day:active { background: var(--page); }
+.h-day .swipe-content { padding: 11px 13px; }
+.h-day .swipe-content:active { background: var(--page); }
+.h-day .swipe-delete-btn { width: 76px; font-size: 14px; }
 .h-day-head {
   display: flex;
   align-items: center;

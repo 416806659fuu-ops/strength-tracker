@@ -200,6 +200,16 @@ function initStrength() {
   const historyRoot = document.getElementById('strength-history');
   if (historyRoot) {
     historyRoot.addEventListener('click', (e) => {
+      const delBtn = e.target.closest('.h-day .swipe-delete-btn');
+      if (delBtn) {
+        const date = delBtn.dataset.date;
+        if (confirm(`删除 ${date} 的整条训练记录？无法恢复。`)) {
+          delete state.strength.days[date];
+          markDirty();
+          renderStrengthHistory();
+        }
+        return;
+      }
       const dayEl = e.target.closest('.h-day');
       if (!dayEl || !dayEl.dataset.date) return;
       openHistoryDayEdit(dayEl.dataset.date);
@@ -238,7 +248,7 @@ function initStrength() {
       openExerciseDetail(editBtn.dataset.ex, { dayKey: strengthDate });
       return;
     }
-    const delBtn = e.target.closest('.set-del');
+    const delBtn = e.target.closest('.set-row .swipe-delete-btn');
     if (delBtn) {
       const day = sEnsureDay(strengthDate);
       const rec = recordFor(day, delBtn.dataset.ex);
@@ -273,7 +283,44 @@ function initStrength() {
     if (e.target.classList.contains('set-weight') || e.target.classList.contains('set-reps')) {
       e.preventDefault();
       addSet(card.dataset.ex);
+    } else if (e.target.classList.contains('set-edit-weight') || e.target.classList.contains('set-edit-reps')) {
+      // 已经记录的组：回车 = 收起键盘触发下面的 change 保存，不是新增一组
+      e.preventDefault();
+      e.target.blur();
     }
+  });
+
+  // 点开某一组已经记下的重量/次数直接改——之前这两格是纯文字，看着像能点进去改，
+  // 其实改不了，只能删了重加；现在改成输入框，失焦/回车就直接写回这一组。
+  container.addEventListener('change', (e) => {
+    const t = e.target;
+    const editingWeight = t.classList.contains('set-edit-weight');
+    const editingReps = t.classList.contains('set-edit-reps');
+    if (!editingWeight && !editingReps) return;
+
+    const exId = t.dataset.ex;
+    const idx = Number(t.dataset.idx);
+    const day = sEnsureDay(strengthDate);
+    const rec = recordFor(day, exId);
+    const s = rec && rec.sets[idx];
+    if (!s) return;
+    const ex = effectiveExercise(exerciseById(exId), rec);
+
+    if (editingWeight) {
+      const v = evalCalExpr(t.value);
+      if (v !== null) s.weight = v;
+    } else if (ex.weightMode === 'unilateral') {
+      const m = String(t.value).trim().match(/^(\d+(?:\.\d+)?)\s*[\/,，]\s*(\d+(?:\.\d+)?)$/);
+      if (m) {
+        s.repsBySide = { L: Number(m[1]), R: Number(m[2]) };
+        s.reps = s.repsBySide.L + s.repsBySide.R;
+      }
+    } else {
+      const v = evalCalExpr(t.value);
+      if (v !== null) s.reps = v;
+    }
+    markDirty();
+    refreshExerciseCard(exId);
   });
 
   // 各自独立初始化：一个模块的 DOM 缺失不该拖垮另一个
@@ -399,14 +446,30 @@ function renderStrengthHero() {
 function renderSetRow(ex, s, i) {
   const info = tagInfo(s.tags && s.tags.length ? s.tags[0] : null);
   const tagChip = s.tags && s.tags.length ? `<span class="set-tag" style="color:${info.color}">${info.label}</span>` : '';
+  // 重量/次数是输入框，不是纯文字——点进去能直接改，失焦就存（container 的
+  // change 监听器接住）。删除挪到往左滑才露出的按钮，小×太容易误触/漏点。
+  // 输入框里只放数字本身，单位（kg/档/×2）挪到旁边一个不能点的小字，
+  // 不然编辑的时候框里还带着单位，改起来碍事。
+  const unitHint = ex.weightMode === 'level' ? '档' : ex.weightMode === 'pair' || ex.weightMode === 'unilateral' ? '×2' : ex.weightMode === 'bodyweight' ? '' : 'kg';
+  const weightInput =
+    ex.weightMode === 'bodyweight'
+      ? '<span class="set-bodyweight-label">自重</span>'
+      : `<input class="set-edit-weight" type="text" inputmode="decimal" autocomplete="off" spellcheck="false"
+           value="${esc(fmt(s.weight))}" data-ex="${esc(ex.id)}" data-idx="${i}"><span class="set-unit-hint">${unitHint}</span>`;
+  const repsVal = s.repsBySide ? `${fmt(s.repsBySide.L)}/${fmt(s.repsBySide.R)}` : fmt(s.reps);
   return `
-    <div class="set-row">
-      <span class="set-idx">${i + 1}</span>
-      <span class="set-weight-label">${weightLabel(ex, s.weight)}</span>
-      <span class="set-x">×</span>
-      <span class="set-reps-label">${repsLabel(s)}</span>
-      ${tagChip}
-      <button class="set-del" data-ex="${esc(ex.id)}" data-idx="${i}" aria-label="删除这一组">&times;</button>
+    <div class="set-row swipe-row">
+      <div class="swipe-track">
+        <div class="swipe-content">
+          <span class="set-idx">${i + 1}</span>
+          ${weightInput}
+          <span class="set-x">×</span>
+          <input class="set-edit-reps" type="text" inputmode="${ex.weightMode === 'unilateral' ? 'text' : 'numeric'}" autocomplete="off" spellcheck="false"
+            value="${esc(repsVal)}" data-ex="${esc(ex.id)}" data-idx="${i}">
+          ${tagChip}
+        </div>
+        <button class="swipe-delete-btn" data-ex="${esc(ex.id)}" data-idx="${i}" aria-label="删除这一组">删除</button>
+      </div>
     </div>`;
 }
 
@@ -1098,14 +1161,19 @@ function renderStrengthHistory() {
         .join('');
       const t = dayTotals(rec);
       return `
-        <div class="h-day" data-date="${d}">
-          <div class="h-day-head">
-            <b>${d.replace(/-/g, '/')}</b>
-            <span class="h-split ${rec.split}">${rec.split}</span>
-            <span class="h-vol">${fmt(t.volume)} kg·次</span>
-            <span class="h-edit-hint">✎</span>
+        <div class="h-day swipe-row" data-date="${d}">
+          <div class="swipe-track">
+            <div class="swipe-content" data-date="${d}">
+              <div class="h-day-head">
+                <b>${d.replace(/-/g, '/')}</b>
+                <span class="h-split ${rec.split}">${rec.split}</span>
+                <span class="h-vol">${fmt(t.volume)} kg·次</span>
+                <span class="h-edit-hint">✎</span>
+              </div>
+              ${rows}
+            </div>
+            <button class="swipe-delete-btn" data-date="${d}" aria-label="删除这一天">删除</button>
           </div>
-          ${rows}
         </div>`;
     })
     .join('');
