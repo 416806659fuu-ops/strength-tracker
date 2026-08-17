@@ -228,11 +228,17 @@ function showConfigHint() {
   const status = document.getElementById('save-status');
   status.textContent = '还没连后端，点这里设置';
   status.style.cursor = 'pointer';
-  status.onclick = () => {
+  status.onclick = async () => {
     // 只删自己那份。裸键归另外两个 app 用，不能碰
     localStorage.removeItem(API_URL_KEY);
     localStorage.removeItem(API_TOKEN_KEY);
-    location.reload();
+    // 不能刷新页面了事：这台设备本机已经有缓存数据，boot() 走的是「本地优先」
+    // 分支（loadLocalCache() 命中），根本不会碰到 bootState() 里那个会弹输入框
+    // 的分支——刷新只会把你原样送回这条「点这里设置」提示，永远弹不出框。
+    // 直接在这次点击的用户手势里同步问，才弹得出来。
+    const { url, token } = getApiConfig();
+    if (!url || !token) return; // 取消了就算了，下次再点
+    await refreshFromServer();
   };
 }
 

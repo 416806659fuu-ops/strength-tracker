@@ -3,11 +3,17 @@ function initSettings() {
   document.getElementById('export-btn').addEventListener('click', exportData);
   document.getElementById('import-input').addEventListener('change', importData);
   document.getElementById('clear-btn').addEventListener('click', clearData);
-  document.getElementById('reset-api-btn').addEventListener('click', () => {
+  document.getElementById('reset-api-btn').addEventListener('click', async () => {
     // 只删自己那份（键名定义在 app.js）。裸键归另外两个 app 用，不能碰
     localStorage.removeItem(API_URL_KEY);
     localStorage.removeItem(API_TOKEN_KEY);
-    location.reload();
+    // 不能刷新页面了事：本机已有缓存数据时 boot() 走本地优先分支，
+    // 根本不会经过会弹输入框的 bootState()，刷新只会原样弹回这个按钮，
+    // 输入框永远弹不出来。直接在这次点击里同步问才行。
+    const { url, token } = getApiConfig();
+    if (!url || !token) return; // 取消了就算了
+    await refreshFromServer();
+    showToast('后端地址已更新');
   });
   document.getElementById('restart-plan-btn').addEventListener('click', restartTodayPlan);
   document.getElementById('restart-wipe-btn').addEventListener('click', () => {
