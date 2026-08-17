@@ -280,10 +280,20 @@ function initStrength() {
     if (e.key !== 'Enter') return;
     const card = e.target.closest('.exercise-card');
     if (!card) return;
-    if (e.target.classList.contains('set-weight') || e.target.classList.contains('set-reps')) {
+    if (
+      e.target.classList.contains('set-weight') ||
+      e.target.classList.contains('set-reps') ||
+      e.target.classList.contains('set-reps-l') ||
+      e.target.classList.contains('set-reps-r')
+    ) {
       e.preventDefault();
       addSet(card.dataset.ex);
-    } else if (e.target.classList.contains('set-edit-weight') || e.target.classList.contains('set-edit-reps')) {
+    } else if (
+      e.target.classList.contains('set-edit-weight') ||
+      e.target.classList.contains('set-edit-reps') ||
+      e.target.classList.contains('set-edit-reps-l') ||
+      e.target.classList.contains('set-edit-reps-r')
+    ) {
       // 已经记录的组：回车 = 收起键盘触发下面的 change 保存，不是新增一组
       e.preventDefault();
       e.target.blur();
@@ -296,7 +306,9 @@ function initStrength() {
     const t = e.target;
     const editingWeight = t.classList.contains('set-edit-weight');
     const editingReps = t.classList.contains('set-edit-reps');
-    if (!editingWeight && !editingReps) return;
+    const editingRepsL = t.classList.contains('set-edit-reps-l');
+    const editingRepsR = t.classList.contains('set-edit-reps-r');
+    if (!editingWeight && !editingReps && !editingRepsL && !editingRepsR) return;
 
     const exId = t.dataset.ex;
     const idx = Number(t.dataset.idx);
@@ -304,17 +316,15 @@ function initStrength() {
     const rec = recordFor(day, exId);
     const s = rec && rec.sets[idx];
     if (!s) return;
-    const ex = effectiveExercise(exerciseById(exId), rec);
 
     if (editingWeight) {
       const v = evalCalExpr(t.value);
       if (v !== null) s.weight = v;
-    } else if (ex.weightMode === 'unilateral') {
-      const m = String(t.value).trim().match(/^(\d+(?:\.\d+)?)\s*[\/,，]\s*(\d+(?:\.\d+)?)$/);
-      if (m) {
-        s.repsBySide = { L: Number(m[1]), R: Number(m[2]) };
-        s.reps = s.repsBySide.L + s.repsBySide.R;
-      }
+    } else if (editingRepsL || editingRepsR) {
+      const v = evalCalExpr(t.value);
+      if (!s.repsBySide) s.repsBySide = { L: 0, R: 0 };
+      s.repsBySide[editingRepsL ? 'L' : 'R'] = v !== null ? v : 0;
+      s.reps = s.repsBySide.L + s.repsBySide.R;
     } else {
       const v = evalCalExpr(t.value);
       if (v !== null) s.reps = v;
@@ -349,23 +359,24 @@ function addSet(exId) {
   const day = sEnsureDay(strengthDate);
   const ex = effectiveExercise(rawEx, recordFor(day, exId));
   const card = document.querySelector(`.exercise-card[data-ex="${exId}"]`);
-  const repsInput = card.querySelector('.set-reps');
   const weightInput = card.querySelector('.set-weight');
 
-  // 左右分计：补记框里直接填「左/右」，比如 8/6
+  // 左右分计：左右各一个框，跟单一次数框长得不一样，别再混着猜
   let reps;
   let repsBySide;
   if (ex.weightMode === 'unilateral') {
-    const m = String(repsInput.value).trim().match(/^(\d+(?:\.\d+)?)\s*[\/,，]\s*(\d+(?:\.\d+)?)$/);
-    const L = m ? Number(m[1]) : NaN;
-    const R = m ? Number(m[2]) : NaN;
-    if (!m || (!(L > 0) && !(R > 0))) {
-      repsInput.focus();
+    const lInput = card.querySelector('.set-reps-l');
+    const rInput = card.querySelector('.set-reps-r');
+    const L = evalCalExpr(lInput.value);
+    const R = evalCalExpr(rInput.value);
+    if ((L === null || L <= 0) && (R === null || R <= 0)) {
+      lInput.focus();
       return;
     }
     repsBySide = { L: L || 0, R: R || 0 };
     reps = repsBySide.L + repsBySide.R;
   } else {
+    const repsInput = card.querySelector('.set-reps');
     reps = evalCalExpr(repsInput.value);
     if (reps === null || reps <= 0) {
       repsInput.focus();
@@ -389,7 +400,8 @@ function addSet(exId) {
   refreshExerciseCard(exId);
 
   const nextCard = document.querySelector(`.exercise-card[data-ex="${exId}"]`);
-  if (nextCard) nextCard.querySelector('.set-reps').focus();
+  const nextInput = nextCard && (nextCard.querySelector('.set-reps') || nextCard.querySelector('.set-reps-l'));
+  if (nextInput) nextInput.focus();
 }
 
 function saveCardio(exId) {
@@ -456,7 +468,18 @@ function renderSetRow(ex, s, i) {
       ? '<span class="set-bodyweight-label">自重</span>'
       : `<input class="set-edit-weight" type="text" inputmode="decimal" autocomplete="off" spellcheck="false"
            value="${esc(fmt(s.weight))}" data-ex="${esc(ex.id)}" data-idx="${i}"><span class="set-unit-hint">${unitHint}</span>`;
-  const repsVal = s.repsBySide ? `${fmt(s.repsBySide.L)}/${fmt(s.repsBySide.R)}` : fmt(s.reps);
+  // 左右分计用两个各自独立的输入框（左/右），不是一个框里塞「8/6」这种格式——
+  // 没有 repsBySide 的老数据/手填数据对半分一下，好歹能进去改，不会一片空白
+  const repsInput = ex.weightMode === 'unilateral'
+    ? `<span class="set-reps-side-group">
+         <input class="set-edit-reps-l" type="text" inputmode="numeric" autocomplete="off" spellcheck="false"
+           value="${esc(fmt(s.repsBySide ? s.repsBySide.L : Math.round((s.reps || 0) / 2)))}" data-ex="${esc(ex.id)}" data-idx="${i}">
+         <span class="set-reps-side-sep">/</span>
+         <input class="set-edit-reps-r" type="text" inputmode="numeric" autocomplete="off" spellcheck="false"
+           value="${esc(fmt(s.repsBySide ? s.repsBySide.R : Math.round((s.reps || 0) / 2)))}" data-ex="${esc(ex.id)}" data-idx="${i}">
+       </span>`
+    : `<input class="set-edit-reps" type="text" inputmode="numeric" autocomplete="off" spellcheck="false"
+         value="${esc(fmt(s.reps))}" data-ex="${esc(ex.id)}" data-idx="${i}">`;
   return `
     <div class="set-row swipe-row">
       <div class="swipe-track">
@@ -464,8 +487,7 @@ function renderSetRow(ex, s, i) {
           <span class="set-idx">${i + 1}</span>
           ${weightInput}
           <span class="set-x">×</span>
-          <input class="set-edit-reps" type="text" inputmode="${ex.weightMode === 'unilateral' ? 'text' : 'numeric'}" autocomplete="off" spellcheck="false"
-            value="${esc(repsVal)}" data-ex="${esc(ex.id)}" data-idx="${i}">
+          ${repsInput}
           ${tagChip}
         </div>
         <button class="swipe-delete-btn" data-ex="${esc(ex.id)}" data-idx="${i}" aria-label="删除这一组">删除</button>
@@ -533,7 +555,13 @@ function renderExerciseCard(rawEx, day) {
       <div class="add-row">
         <button class="tag-toggle" data-ex="${esc(ex.id)}">● 正式</button>
         ${weightInput}
-        <input class="set-reps" type="text" inputmode="${ex.weightMode === 'unilateral' ? 'text' : 'numeric'}" autocomplete="off" spellcheck="false" placeholder="${ex.weightMode === 'unilateral' ? '左/右，如 8/6' : '次数'}">
+        ${ex.weightMode === 'unilateral'
+          ? `<span class="set-reps-side-group">
+               <input class="set-reps-l" type="text" inputmode="numeric" autocomplete="off" spellcheck="false" placeholder="左">
+               <span class="set-reps-side-sep">/</span>
+               <input class="set-reps-r" type="text" inputmode="numeric" autocomplete="off" spellcheck="false" placeholder="右">
+             </span>`
+          : `<input class="set-reps" type="text" inputmode="numeric" autocomplete="off" spellcheck="false" placeholder="次数">`}
         <button class="set-add" data-ex="${esc(ex.id)}">+</button>
       </div>
     </div>`;

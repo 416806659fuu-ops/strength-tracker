@@ -1,14 +1,14 @@
-const CACHE = 'strength-tracker-v2';
-// 这里的 ?v=2 要和 index.html 里 <script>/<link> 上的版本号完全一致——离线时
+const CACHE = 'strength-tracker-v3';
+// 这里的 ?v=3 要和 index.html 里 <script>/<link> 上的版本号完全一致——离线时
 // 浏览器请求的是带版本号的那个网址，预缓存的键对不上就等于没缓存。改版本号要两边一起改。
 const ASSETS = [
   './',
   './index.html',
-  './style.css?v=2',
-  './app.js?v=2',
-  './strength.js?v=2',
-  './session.js?v=2',
-  './settings.js?v=2',
+  './style.css?v=3',
+  './app.js?v=3',
+  './strength.js?v=3',
+  './session.js?v=3',
+  './settings.js?v=3',
   './manifest.json',
 ];
 

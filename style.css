@@ -404,6 +404,30 @@ main {
   outline: none;
   border-bottom-color: var(--series-blue);
 }
+/* 左右分计：左右各一个独立小框，不是一个框里塞「8/6」——用户老是猜不出
+   那种格式，干脆做成看得出来的两个框，跟历史页显示的「8/6」用同一个
+   斜杠分隔，一眼对得上。 */
+.set-reps-side-group { display: flex; align-items: center; flex: 1; min-width: 0; gap: 3px; }
+.set-reps-side-sep { flex: none; color: var(--text-muted); font-size: 12px; }
+.set-row .set-edit-reps-l,
+.set-row .set-edit-reps-r {
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  flex: 1;
+  min-width: 0;
+  width: 0;
+  text-align: center;
+  border: none;
+  border-bottom: 1px solid transparent;
+  background: transparent;
+  font: inherit;
+  padding: 2px 0;
+}
+.set-row .set-edit-reps-l:focus,
+.set-row .set-edit-reps-r:focus {
+  outline: none;
+  border-bottom-color: var(--series-blue);
+}
 .set-row .set-tag { flex: none; font-size: 12px; }
 .set-empty {
   padding: 7px 0;
@@ -413,6 +437,8 @@ main {
 
 .add-row .set-weight { flex: 1.2; min-width: 0; width: 0; }
 .add-row .set-reps { flex: 1; min-width: 0; width: 0; }
+.add-row .set-reps-side-group { flex: 1.4; min-width: 0; }
+.add-row .set-reps-side-group input { flex: 1; min-width: 0; width: 0; text-align: center; }
 .add-row .set-bodyweight {
   flex: 1.2;
   display: flex;
