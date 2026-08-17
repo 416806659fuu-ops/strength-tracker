@@ -100,7 +100,7 @@ function getApiConfig() {
 }
 
 // 组间休息时长（秒）：热身组之后 30s，正式组之间 60s，一个动作全部练完 180s
-const DEFAULT_REST = { afterWarmup: 30, betweenSets: 60, betweenExercises: 180 };
+const DEFAULT_REST = { afterWarmup: 30, betweenSets: 60, betweenExercises: 180, betweenSides: 30 };
 
 function defaultState() {
   return {

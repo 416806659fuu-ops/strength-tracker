@@ -20,6 +20,10 @@ const SET_TAGS = [
 ];
 
 let strengthDate = todayKey();
+// 非空时说明正在从「历史」tab 点进来改某一天的记录（补记/改错），
+// strengthDate 被故意指向了过去——下面 initStrength() 里的跨天检查得知道
+// 这不是「忘了切到今天」，不能把人拽回去。
+let viewingHistoryDate = null;
 
 // 每个动作的「待添加组」暂存的标记，key 是 exerciseId
 const pendingTag = {};
@@ -167,11 +171,12 @@ function defaultWeightFor(ex, rec) {
 
 // ---- 交互 ----
 function initStrength() {
-  // 日期不可切换 —— 训练页永远是今天，往日回顾以后放历史页。
-  // 时钟每 10 秒走一格；跨天（比如练到半夜十二点）自动翻到新的一天。
+  // 训练页平时永远是今天；时钟每 10 秒走一格，跨天（比如练到半夜十二点）
+  // 自动翻到新的一天。但如果正在从历史页编辑某一天（viewingHistoryDate
+  // 非空），这个检查得让路，不然 10 秒内就会被强制拽回今天。
   updateDateClock();
   setInterval(() => {
-    if (todayKey() !== strengthDate) {
+    if (!viewingHistoryDate && todayKey() !== strengthDate) {
       strengthDate = todayKey();
       forceFormMode = false;
       renderStrength();
@@ -179,7 +184,27 @@ function initStrength() {
     updateDateClock();
   }, 10000);
 
-  document.getElementById('back-to-session-btn').addEventListener('click', () => showStrengthForm(false));
+  document.getElementById('back-to-session-btn').addEventListener('click', () => {
+    if (viewingHistoryDate) {
+      viewingHistoryDate = null;
+      strengthDate = todayKey();
+      forceFormMode = false;
+      renderStrength();
+    } else {
+      showStrengthForm(false);
+    }
+  });
+
+  // 历史页点某一天 = 进补记模式改那天的记录：加/删组、改计划归属，
+  // 复用表单模式本来就有的这套逻辑（本来就不认「今天」，只认 strengthDate）。
+  const historyRoot = document.getElementById('strength-history');
+  if (historyRoot) {
+    historyRoot.addEventListener('click', (e) => {
+      const dayEl = e.target.closest('.h-day');
+      if (!dayEl || !dayEl.dataset.date) return;
+      openHistoryDayEdit(dayEl.dataset.date);
+    });
+  }
 
   document.getElementById('split-switch').addEventListener('click', (e) => {
     const btn = e.target.closest('button[data-split]');
@@ -366,6 +391,9 @@ function renderStrengthHero() {
   document.getElementById('s-hero-sets').textContent = sets;
   document.getElementById('s-hero-reps').textContent = reps;
   document.getElementById('s-hero-moves').textContent = day.exercises.filter((r) => r.sets.length).length;
+  // 在改历史记录时把标签换成具体日期，别让人以为自己在改「今天」
+  const label = document.getElementById('s-hero-label');
+  if (label) label.textContent = viewingHistoryDate ? `${viewingHistoryDate.replace(/-/g, '/')} 训练容量` : '今日训练容量';
 }
 
 function renderSetRow(ex, s, i) {
@@ -456,6 +484,15 @@ function showStrengthForm(on) {
   renderStrength();
 }
 
+// 从历史页点某一天进来：把 strengthDate 指过去，走的还是表单模式的
+// add/del-set、split-switch 那套（strengthDate !== todayKey() 时
+// renderStrength() 已经自动只走表单模式，不用另外分支）。
+function openHistoryDayEdit(dateKey) {
+  viewingHistoryDate = dateKey;
+  strengthDate = dateKey;
+  switchView('strength');
+}
+
 const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
 
 function updateDateClock() {
@@ -494,7 +531,14 @@ function renderStrength() {
 
   document.getElementById('strength-session').style.display = useSession ? '' : 'none';
   document.getElementById('strength-form').style.display = useSession ? 'none' : '';
-  document.getElementById('back-to-session-btn').style.display = !useSession && isToday ? '' : 'none';
+  const backBtn = document.getElementById('back-to-session-btn');
+  if (viewingHistoryDate) {
+    backBtn.textContent = '返回今天';
+    backBtn.style.display = '';
+  } else {
+    backBtn.textContent = '返回训练模式';
+    backBtn.style.display = !useSession && isToday ? '' : 'none';
+  }
 
   if (useSession) {
     window.renderSession();
@@ -1054,11 +1098,12 @@ function renderStrengthHistory() {
         .join('');
       const t = dayTotals(rec);
       return `
-        <div class="h-day">
+        <div class="h-day" data-date="${d}">
           <div class="h-day-head">
             <b>${d.replace(/-/g, '/')}</b>
             <span class="h-split ${rec.split}">${rec.split}</span>
             <span class="h-vol">${fmt(t.volume)} kg·次</span>
+            <span class="h-edit-hint">✎</span>
           </div>
           ${rows}
         </div>`;

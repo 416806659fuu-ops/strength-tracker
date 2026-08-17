@@ -391,11 +391,16 @@ function confirmSet() {
   const ex = item.ex;
 
   // 左右分计先记左边：这一下点确认只是把左边的次数存住、转轮切到右边，
-  // 还没真的算完这一组——不写记录、不推进、不进休息
+  // 还没真的算完这一组——不写记录、不推进这一组的计数。但换边通常要走
+  // 到器械另一侧/换个站姿，跟正常组间一样给一段可以真正休息的倒计时，
+  // 跟其他休息统一走「归零后要点一下才继续」，不再是点一下就瞬间切换。
   if (ex.weightMode === 'unilateral' && unilateralStep === 'L') {
     sessionRepsL = sessionReps;
     unilateralStep = 'R';
-    renderSession();
+    const rest = state.settings.rest || DEFAULT_REST;
+    const seconds = rest.betweenSides ?? DEFAULT_REST.betweenSides;
+    renderSession(); // 界面先推进到右侧转轮，再盖上倒计时盘
+    startRest(seconds, true);
     return;
   }
 
@@ -726,10 +731,13 @@ function renderSession() {
   const isUnilateral = ex.weightMode === 'unilateral';
   const reps = isUnilateral ? defaultRepsFor(ex, pos.setIdx, item.rec, unilateralStep) : defaultRepsFor(ex, pos.setIdx, item.rec);
   const warm = isWarmupIdx(ex, pos.setIdx);
-  const restSec = restSecondsAfter(list, pos.exIdx, pos.setIdx);
-  // 左边刚记完、还没记右边：这一下点确认只是切到右边转轮，不是真的完成这一组，
-  // 按钮不该显示休息秒数，免得以为点了就要开始休息
-  const confirmLabel = isUnilateral && unilateralStep === 'L' ? '→ 右' : restSec > 0 ? restSec + 's' : '完成';
+  // 左边刚记完、还没记右边：接下来是换边休息（betweenSides），不是这一组
+  // 真正完成后的组间/换动作休息——跟其他按钮一样如实显示接下来要休息几秒，
+  // 不再用「→ 右」这种跟别处不一致的特殊态，点哪个按钮都遵循同一套预期。
+  const restSec = isUnilateral && unilateralStep === 'L'
+    ? (state.settings.rest || DEFAULT_REST).betweenSides ?? DEFAULT_REST.betweenSides
+    : restSecondsAfter(list, pos.exIdx, pos.setIdx);
+  const confirmLabel = restSec > 0 ? restSec + 's' : '完成';
 
   // 上次记录：只写日期 + 每组次数的圆点，不加「上次」标注（看日期就懂）
   const prev = lastSession(ex.id, strengthDate);
