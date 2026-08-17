@@ -11,7 +11,7 @@
 <meta name="apple-mobile-web-app-title" content="重训记录">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
 <link rel="manifest" href="manifest.json">
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="style.css?v=2">
 </head>
 <body>
 
@@ -90,6 +90,12 @@
       <button class="settings-btn" id="reset-api-btn">重新设置后端地址/密码</button>
       <p class="settings-note">首次在新设备/新浏览器打开时会自动问一次后端地址和密码；如果输错了或者以后换了新的 Apps Script 部署，点这个按钮重新输入。</p>
     </div>
+
+    <div class="settings-section">
+      <h2>版本</h2>
+      <button class="settings-btn" id="force-update-btn">强制更新到最新版</button>
+      <p class="settings-note">这个 app 缓存在手机上，代码更新后有时要过一会儿才生效。感觉功能不对/改了没反应时，点这个按钮强制拉最新版，本机记录和后端设置都不会丢。</p>
+    </div>
   </section>
 
 </main>
@@ -146,9 +152,9 @@
   <button data-tab="settings"><span class="tab-icon">⚙️</span>设置</button>
 </nav>
 
-<script src="app.js"></script>
-<script src="strength.js"></script>
-<script src="session.js"></script>
-<script src="settings.js"></script>
+<script src="app.js?v=2"></script>
+<script src="strength.js?v=2"></script>
+<script src="session.js?v=2"></script>
+<script src="settings.js?v=2"></script>
 </body>
 </html>

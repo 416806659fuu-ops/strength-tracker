@@ -498,6 +498,15 @@ async function boot() {
 
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
     navigator.serviceWorker.register('./sw.js').catch(() => {});
+    // 新的 service worker 接管后自动刷新一次，页面已经打开着也能立刻用上
+    // 最新代码，不用手动退出 app 重进——配合 sw.js 的网络优先策略，才算
+    // 真正解决「改完代码用户手机上还是旧版本」的问题。
+    let reloaded = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (reloaded) return;
+      reloaded = true;
+      location.reload();
+    });
   }
 }
 

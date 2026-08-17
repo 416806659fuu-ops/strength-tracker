@@ -26,6 +26,26 @@ function initSettings() {
     document.getElementById('restart-confirm').style.display = 'none';
     restartTodayWipe();
   });
+  document.getElementById('force-update-btn').addEventListener('click', forceUpdate);
+}
+
+// 注销 service worker + 清空所有 caches，再带时间戳重新加载——绕开缓存，
+// 强制拉最新代码。localStorage（本机记录、后端地址/密码）不会动。
+async function forceUpdate() {
+  showToast('正在更新…');
+  try {
+    if ('serviceWorker' in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map((r) => r.unregister()));
+    }
+    if (window.caches) {
+      const keys = await caches.keys();
+      await Promise.all(keys.map((k) => caches.delete(k)));
+    }
+  } catch (e) {
+    // 清不掉也照样往下走，加时间戳重新加载本身就能绕开大部分缓存
+  }
+  location.replace(`${location.pathname}?u=${Date.now()}`);
 }
 
 // 「重新选择今日计划」：软重置，今天已经记的组原样保留，只是重新弹一次
