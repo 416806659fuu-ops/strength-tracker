@@ -57,12 +57,13 @@ function exerciseById(id) {
 }
 
 function exercisesForSplit(split) {
-  return state.strength.catalog
-    .filter((e) => e.split === split && !e.archived)
-    .sort((a, b) => (a.order || 0) - (b.order || 0));
+  // 没有「归档」这个中间态了：动作要么在目录里（对应计划的训练页就会出现），
+  // 要么被删掉。旧数据里可能还留着 archived:true 的动作（归档功能下线前
+  // 产生的），这里不再认这个字段，让它们正常显示回来。
+  return state.strength.catalog.filter((e) => e.split === split).sort((a, b) => (a.order || 0) - (b.order || 0));
 }
 
-// 当天该显示哪些动作：该分化下的动作，外加当天已经记过、但如今已归档或改了分化的动作
+// 当天该显示哪些动作：该分化下的动作，外加当天已经记过、但如今改了分化的动作
 // （否则那些记录会从界面上消失，数据还在但看不见）
 function visibleExercises(day) {
   const list = exercisesForSplit(day.split);
@@ -715,7 +716,7 @@ const SEED_CATALOG = [
   { name: '爬坡走', split: 'B', kind: 'cardio', durationMin: 20 },
 ];
 
-// 这个动作被多少天的记录引用了。有引用就不能真删，只能归档，
+// 这个动作被多少天的记录引用了。有引用就不能删，
 // 否则那些天的记录会因为找不到动作而在界面上凭空消失。
 function usageCount(exId) {
   return Object.values(state.strength.days).filter((day) =>
@@ -902,7 +903,7 @@ function renderExerciseDetail() {
   );
 
   const used = usageCount(rawEx.id);
-  const usedNote = used > 0 ? `已经在 ${used} 天的记录里出现过，不能删除，只能归档。` : '还没有任何记录，可以直接删除。';
+  const usedNote = used > 0 ? `已经在 ${used} 天的记录里出现过，不能删除。` : '还没有任何记录，可以直接删除。';
 
   // 只有从训练/表单带着 dayKey 进来才有这个切换；从设置→动作库直接进来的
   // 没有「今天」这个概念，行为跟原来一样——全部当永久保存，不显示切换。
@@ -918,7 +919,7 @@ function renderExerciseDetail() {
     </div>`
     : '';
 
-  // 名称/计划归属/类型/归档/删除都是目录的身份字段，「仅本次」模式下没有意义，不显示
+  // 名称/计划归属/类型/删除都是目录的身份字段，「仅本次」模式下没有意义，不显示
   const identityBlock = showOnce
     ? ''
     : `
@@ -940,13 +941,17 @@ function renderExerciseDetail() {
       </div>`
     )}`;
 
+  // 没有「归档」这个中间状态了——目录里的动作要么在（对之后每次训练都生效，
+  // 不分「今天加的」和「以前就有的」），要么删掉。这里两个按钮都不是真的在
+  // "add"：字段本来就是失焦即存，「添加项目」点了只是关掉详情页、回到目录，
+  // 给一个明确的"存好了"反馈（原来没有这一下，容易被当成没保存成功）。
   const dangerBlock = showOnce
     ? ''
     : `
     <div class="detail-danger">
       <p class="detail-hint">${usedNote}</p>
-      <button class="settings-btn" id="d-archive">${rawEx.archived ? '取消归档' : '归档（不再出现在训练页）'}</button>
-      <button class="settings-btn danger" id="d-delete"${used > 0 ? ' disabled' : ''}>删除这个动作</button>
+      <button class="settings-btn primary" id="d-confirm-add">添加项目</button>
+      <button class="settings-btn danger" id="d-delete"${used > 0 ? ' disabled' : ''}>删除此项目</button>
     </div>`;
 
   body.innerHTML = `
@@ -1024,14 +1029,10 @@ function initExerciseDetail() {
       renderExerciseDetail();
       return;
     }
-    if (e.target.id === 'd-archive') {
-      // 归档会让这个动作立刻从今天的训练列表里消失，容易跟"保存/确认"误按
-      // （尤其是刚加完新动作、详情页第一个显眼按钮就是它）——归档前问一句；
-      // 取消归档是无害的恢复动作，不用确认。
-      if (!ex.archived && !confirm(`归档「${ex.name}」？归档后它不会再出现在训练页，但历史记录还留着，随时可以取消归档。`)) return;
-      ex.archived = !ex.archived;
-      markDirty();
-      renderExerciseDetail();
+    if (e.target.id === 'd-confirm-add') {
+      // 字段本来就是失焦即存，这里不用额外写什么，纯粹是给一个"关掉=存好了"
+      // 的明确反馈，跟点返回箭头效果一样。
+      closeExerciseDetail();
       return;
     }
     if (e.target.id === 'd-delete') {
@@ -1152,7 +1153,7 @@ function renderCatalog() {
           .sort((a, b) => (a.order || 0) - (b.order || 0))
           .map(
             (ex) => `
-        <div class="catalog-row${ex.archived ? ' archived' : ''}" data-ex="${esc(ex.id)}">
+        <div class="catalog-row" data-ex="${esc(ex.id)}">
           <div class="catalog-row-main">
             <span class="catalog-name">${esc(ex.name)}</span>
             <span class="catalog-sub">${exerciseSummary(ex)}</span>
