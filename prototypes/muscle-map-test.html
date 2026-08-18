@@ -128,7 +128,11 @@
 
   .figures { display: flex; gap: 20px; justify-content: center; }
   figure { margin: 0; text-align: center; flex: 1; min-width: 0; max-width: 200px; }
-  figure svg { width: 100%; height: auto; display: block; touch-action: manipulation; }
+  /* 正面/背面两张图原始 viewBox 比例不完全一样（尤其女版，正面 734:1538
+     背面 774:1448），各自按 height:auto 独立撑高的话脚的位置会一个高一个
+     低。改成统一比例的固定框 + preserveAspectRatio 贴底对齐（见下面 JS
+     里的 xMidYMax），脚永远卡在框底部，不管哪套数据原始比例多少。 */
+  figure svg { width: 100%; aspect-ratio: 1 / 2.1; display: block; touch-action: manipulation; }
   figcaption { margin-top: 6px; font-size: 12px; color: var(--text-faint); font-weight: 600; letter-spacing: 0.02em; }
 
   .mgroup {
@@ -618,8 +622,11 @@ var MUSCLES_MALE = [
   function buildFigure(svgId, view) {
     var svg = document.getElementById(svgId);
     svg.setAttribute('viewBox', VIEWBOXES[gender][view]);
+    // 贴底对齐：不管这套数据原始 viewBox 高宽比多少，脚都卡在图框最底部，
+    // 富余的高度差全部让给头顶上方，不会把脚顶得一高一低
+    svg.setAttribute('preserveAspectRatio', 'xMidYMax meet');
     svg.innerHTML = '';
-    DATASETS[gender].filter(function (m) { return m[1] === view; }).forEach(function (m) {
+    DATASETS[gender].filter(function (m) { return m[1] === view && m[0] !== 'hair'; }).forEach(function (m) {
       var id = m[0], group = m[2], d = m[3];
       if (group) {
         svg.appendChild(svgEl('path', {
