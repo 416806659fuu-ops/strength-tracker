@@ -1,0 +1,503 @@
+<meta charset="UTF-8">
+<title>肌肉地图 v1 · 10部位方块版（存档）</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root {
+    --bg: #eef0f3;
+    --surface: #ffffff;
+    --surface-2: #f5f6f8;
+    --border: #dde1e6;
+    --text: #20242b;
+    --text-muted: #676d78;
+    --text-faint: #9aa0aa;
+    --line: rgba(32, 36, 43, 0.38);
+    --line-soft: rgba(32, 36, 43, 0.16);
+    --skin: rgba(32, 36, 43, 0.05);
+    --focus: #20242b;
+    --shadow: 0 1px 2px rgba(20, 22, 26, 0.04), 0 8px 24px rgba(20, 22, 26, 0.06);
+
+    --c-chest: #d97757;
+    --c-back: #4f9d8f;
+    --c-shoulders: #d9a441;
+    --c-biceps: #6b8fd4;
+    --c-triceps: #b56fc9;
+    --c-abs: #d4574f;
+    --c-glutes: #c9598f;
+    --c-quads: #7fb856;
+    --c-hamstrings: #4f8f6b;
+    --c-calves: #7c8fa8;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #15171b;
+      --surface: #1c1f25;
+      --surface-2: #22252c;
+      --border: #2b2f37;
+      --text: #e8eaed;
+      --text-muted: #9aa0aa;
+      --text-faint: #6b7078;
+      --line: rgba(232, 234, 237, 0.4);
+      --line-soft: rgba(232, 234, 237, 0.14);
+      --skin: rgba(232, 234, 237, 0.06);
+      --focus: #e8eaed;
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.35);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #15171b;
+    --surface: #1c1f25;
+    --surface-2: #22252c;
+    --border: #2b2f37;
+    --text: #e8eaed;
+    --text-muted: #9aa0aa;
+    --text-faint: #6b7078;
+    --line: rgba(232, 234, 237, 0.4);
+    --line-soft: rgba(232, 234, 237, 0.14);
+    --skin: rgba(232, 234, 237, 0.06);
+    --focus: #e8eaed;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.35);
+  }
+
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+  }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Segoe UI", sans-serif;
+    line-height: 1.5;
+    padding: 28px 20px 60px;
+  }
+  .wrap { max-width: 980px; margin: 0 auto; }
+
+  header { margin-bottom: 24px; }
+  .eyebrow {
+    display: inline-block;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 4px 12px;
+    margin: 0 0 14px;
+  }
+  h1 {
+    font-size: 24px;
+    font-weight: 700;
+    margin: 0 0 8px;
+    text-wrap: balance;
+  }
+  .lede {
+    font-size: 14px;
+    color: var(--text-muted);
+    max-width: 62ch;
+    margin: 0;
+  }
+
+  main {
+    display: grid;
+    grid-template-columns: minmax(0, 1.15fr) minmax(280px, 0.85fr);
+    gap: 20px;
+    align-items: start;
+    margin-top: 24px;
+  }
+  @media (max-width: 780px) {
+    main { grid-template-columns: 1fr; }
+  }
+
+  .diagram-pane {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 20px;
+    box-shadow: var(--shadow);
+  }
+  .figures {
+    display: flex;
+    gap: 16px;
+    justify-content: center;
+  }
+  figure { margin: 0; text-align: center; flex: 1; min-width: 0; max-width: 220px; }
+  figure svg { width: 100%; height: auto; display: block; touch-action: manipulation; }
+  figcaption {
+    margin-top: 6px;
+    font-size: 12px;
+    color: var(--text-faint);
+    font-weight: 600;
+    letter-spacing: 0.02em;
+  }
+
+  .mgroup { cursor: pointer; fill-opacity: 0; stroke: var(--line); stroke-width: 1.4; transition: fill-opacity 160ms ease, stroke 160ms ease, opacity 160ms ease; }
+  .mgroup:hover { fill-opacity: 0.22; }
+  .mgroup.is-active { fill-opacity: 0.34; stroke-width: 2; }
+  .mgroup.is-dimmed { opacity: 0.32; }
+  .mgroup:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  .neutral-part { fill: var(--skin); stroke: var(--line-soft); stroke-width: 1.2; pointer-events: none; }
+  .ab-line { stroke: var(--line-soft); stroke-width: 1; fill: none; pointer-events: none; }
+
+  .legend {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(108px, 1fr));
+    gap: 6px;
+    margin-top: 18px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 12.5px;
+    color: var(--text-muted);
+    background: none;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    padding: 5px 7px;
+    cursor: pointer;
+    text-align: left;
+    font-family: inherit;
+  }
+  .legend-item:hover { background: var(--surface-2); }
+  .legend-item.is-active { background: var(--surface-2); border-color: var(--border); color: var(--text); font-weight: 600; }
+  .legend-item:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 20px;
+    box-shadow: var(--shadow);
+    position: sticky;
+    top: 20px;
+  }
+  .panel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  .panel-title { display: flex; align-items: center; gap: 9px; min-width: 0; }
+  .panel-title .dot { width: 13px; height: 13px; }
+  .panel-title h2 { font-size: 17px; margin: 0; font-weight: 700; }
+  .panel-count { font-size: 12px; color: var(--text-faint); font-variant-numeric: tabular-nums; }
+  .clear-btn {
+    font-size: 12.5px;
+    color: var(--text-muted);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 5px 10px;
+    cursor: pointer;
+    font-family: inherit;
+    flex: none;
+  }
+  .clear-btn:hover { color: var(--text); }
+
+  .panel-hint {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin: 0 0 16px;
+  }
+
+  .ex-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+  .ex-card {
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--c);
+    border-radius: 10px;
+    padding: 9px 12px;
+    background: var(--surface-2);
+  }
+  .ex-name { font-size: 14px; font-weight: 600; display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+  .ex-demo-tag { font-size: 11px; font-weight: 500; color: var(--text-faint); }
+  .ex-meta { font-size: 12.5px; color: var(--text-muted); margin-top: 2px; font-variant-numeric: tabular-nums; }
+  .ex-group-label { font-size: 11px; color: var(--text-faint); margin-top: 2px; }
+
+  .full-list-head {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-faint);
+    letter-spacing: 0.02em;
+    margin: 18px 0 8px;
+  }
+  .panel hr { border: none; border-top: 1px solid var(--border); margin: 18px 0; }
+
+  .tooltip {
+    position: fixed;
+    pointer-events: none;
+    background: var(--text);
+    color: var(--bg);
+    font-size: 12px;
+    font-weight: 600;
+    padding: 4px 9px;
+    border-radius: 6px;
+    transform: translate(-50%, -130%);
+    white-space: nowrap;
+    z-index: 20;
+  }
+  .tooltip[hidden] { display: none; }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; }
+  }
+</style>
+
+<div class="wrap">
+  <header>
+    <span class="eyebrow">重训 app 设计测试页 · 不连后端 · 不进正式版本</span>
+    <h1>点一块肌肉，看看练它都用什么动作</h1>
+    <p class="lede">现在训练卡片的颜色只是按加入顺序循环分配的。这一版试着换个逻辑：颜色跟着身体部位走——同一个部位不管哪天练、练几次，颜色都是固定的那一个。</p>
+  </header>
+
+  <main>
+    <section class="diagram-pane">
+      <div class="figures">
+        <figure>
+          <svg id="svg-front" viewBox="0 0 200 440" aria-label="人体正面示意图">
+            <!-- 颈/头（非交互） -->
+            <circle class="neutral-part" cx="100" cy="32" r="20"></circle>
+            <rect class="neutral-part" x="90" y="50" width="20" height="12" rx="5"></rect>
+            <!-- 躯干轮廓（非交互底层，让胸/腹形状看起来落在身体上） -->
+            <path class="neutral-part" d="M58,62 C58,60 72,58 100,58 C128,58 142,60 142,62 L148,96 C150,108 148,120 144,132 L138,180 C136,196 128,206 116,210 L84,210 C72,206 64,196 62,180 L56,132 C52,120 50,108 52,96 Z"></path>
+
+            <!-- 肩（三角肌） -->
+            <ellipse class="mgroup" data-group="shoulders" tabindex="0" role="button" aria-label="肩" cx="54" cy="76" rx="15" ry="17"></ellipse>
+            <ellipse class="mgroup" data-group="shoulders" tabindex="0" role="button" aria-label="肩" cx="146" cy="76" rx="15" ry="17"></ellipse>
+
+            <!-- 胸（胸大肌） -->
+            <ellipse class="mgroup" data-group="chest" tabindex="0" role="button" aria-label="胸" cx="82" cy="88" rx="19" ry="15"></ellipse>
+            <ellipse class="mgroup" data-group="chest" tabindex="0" role="button" aria-label="胸" cx="118" cy="88" rx="19" ry="15"></ellipse>
+
+            <!-- 腹（腹直肌，带装饰线） -->
+            <rect class="mgroup" data-group="abs" tabindex="0" role="button" aria-label="腹" x="82" y="108" width="36" height="68" rx="12"></rect>
+            <line class="ab-line" x1="100" y1="112" x2="100" y2="172"></line>
+            <line class="ab-line" x1="84" y1="128" x2="116" y2="128"></line>
+            <line class="ab-line" x1="84" y1="150" x2="116" y2="150"></line>
+
+            <!-- 二头（上臂前侧） -->
+            <rect class="mgroup" data-group="biceps" tabindex="0" role="button" aria-label="二头肌" x="28" y="86" width="22" height="68" rx="11" transform="rotate(-8 39 120)"></rect>
+            <rect class="mgroup" data-group="biceps" tabindex="0" role="button" aria-label="二头肌" x="150" y="86" width="22" height="68" rx="11" transform="rotate(8 161 120)"></rect>
+
+            <!-- 前臂/手（非交互） -->
+            <rect class="neutral-part" x="22" y="152" width="18" height="64" rx="9" transform="rotate(-5 31 184)"></rect>
+            <rect class="neutral-part" x="160" y="152" width="18" height="64" rx="9" transform="rotate(5 169 184)"></rect>
+            <circle class="neutral-part" cx="27" cy="222" r="11"></circle>
+            <circle class="neutral-part" cx="173" cy="222" r="11"></circle>
+
+            <!-- 股四头（大腿前侧） -->
+            <rect class="mgroup" data-group="quads" tabindex="0" role="button" aria-label="股四头肌" x="62" y="208" width="34" height="104" rx="17"></rect>
+            <rect class="mgroup" data-group="quads" tabindex="0" role="button" aria-label="股四头肌" x="104" y="208" width="34" height="104" rx="17"></rect>
+
+            <!-- 膝（非交互） -->
+            <ellipse class="neutral-part" cx="79" cy="316" rx="15" ry="8"></ellipse>
+            <ellipse class="neutral-part" cx="121" cy="316" rx="15" ry="8"></ellipse>
+
+            <!-- 小腿前侧 -->
+            <rect class="mgroup" data-group="calves" tabindex="0" role="button" aria-label="小腿" x="66" y="322" width="26" height="86" rx="13"></rect>
+            <rect class="mgroup" data-group="calves" tabindex="0" role="button" aria-label="小腿" x="108" y="322" width="26" height="86" rx="13"></rect>
+
+            <!-- 脚（非交互） -->
+            <ellipse class="neutral-part" cx="79" cy="414" rx="16" ry="9"></ellipse>
+            <ellipse class="neutral-part" cx="121" cy="414" rx="16" ry="9"></ellipse>
+          </svg>
+          <figcaption>正面</figcaption>
+        </figure>
+
+        <figure>
+          <svg id="svg-back" viewBox="0 0 200 440" aria-label="人体背面示意图">
+            <circle class="neutral-part" cx="100" cy="32" r="20"></circle>
+            <rect class="neutral-part" x="90" y="50" width="20" height="12" rx="5"></rect>
+
+            <!-- 背（斜方/背阔，整片就是躯干轮廓本身） -->
+            <path class="mgroup" data-group="back" tabindex="0" role="button" aria-label="背" d="M58,62 C58,60 72,58 100,58 C128,58 142,60 142,62 L148,96 C150,108 148,120 144,132 L138,180 C136,196 128,206 116,210 L84,210 C72,206 64,196 62,180 L56,132 C52,120 50,108 52,96 Z"></path>
+
+            <!-- 肩（后三角肌） -->
+            <ellipse class="mgroup" data-group="shoulders" tabindex="0" role="button" aria-label="肩" cx="54" cy="76" rx="15" ry="17"></ellipse>
+            <ellipse class="mgroup" data-group="shoulders" tabindex="0" role="button" aria-label="肩" cx="146" cy="76" rx="15" ry="17"></ellipse>
+
+            <!-- 三头（上臂后侧） -->
+            <rect class="mgroup" data-group="triceps" tabindex="0" role="button" aria-label="三头肌" x="28" y="86" width="22" height="68" rx="11" transform="rotate(-8 39 120)"></rect>
+            <rect class="mgroup" data-group="triceps" tabindex="0" role="button" aria-label="三头肌" x="150" y="86" width="22" height="68" rx="11" transform="rotate(8 161 120)"></rect>
+
+            <rect class="neutral-part" x="22" y="152" width="18" height="64" rx="9" transform="rotate(-5 31 184)"></rect>
+            <rect class="neutral-part" x="160" y="152" width="18" height="64" rx="9" transform="rotate(5 169 184)"></rect>
+            <circle class="neutral-part" cx="27" cy="222" r="11"></circle>
+            <circle class="neutral-part" cx="173" cy="222" r="11"></circle>
+
+            <!-- 臀 -->
+            <ellipse class="mgroup" data-group="glutes" tabindex="0" role="button" aria-label="臀" cx="100" cy="206" rx="44" ry="24"></ellipse>
+
+            <!-- 腘绳肌（大腿后侧） -->
+            <rect class="mgroup" data-group="hamstrings" tabindex="0" role="button" aria-label="腘绳肌" x="62" y="222" width="34" height="96" rx="17"></rect>
+            <rect class="mgroup" data-group="hamstrings" tabindex="0" role="button" aria-label="腘绳肌" x="104" y="222" width="34" height="96" rx="17"></rect>
+
+            <ellipse class="neutral-part" cx="79" cy="316" rx="15" ry="8"></ellipse>
+            <ellipse class="neutral-part" cx="121" cy="316" rx="15" ry="8"></ellipse>
+
+            <!-- 小腿后侧（腓肠肌，跟正面共用同一个「小腿」分组） -->
+            <rect class="mgroup" data-group="calves" tabindex="0" role="button" aria-label="小腿" x="64" y="322" width="28" height="84" rx="14"></rect>
+            <rect class="mgroup" data-group="calves" tabindex="0" role="button" aria-label="小腿" x="108" y="322" width="28" height="84" rx="14"></rect>
+
+            <ellipse class="neutral-part" cx="79" cy="414" rx="16" ry="9"></ellipse>
+            <ellipse class="neutral-part" cx="121" cy="414" rx="16" ry="9"></ellipse>
+          </svg>
+          <figcaption>背面</figcaption>
+        </figure>
+      </div>
+
+      <div class="legend" id="legend"></div>
+    </section>
+
+    <aside class="panel" id="panel"></aside>
+  </main>
+</div>
+
+<div class="tooltip" id="tooltip" hidden></div>
+
+<script>
+  // 部位 → 颜色 + 该部位对应的训练项目。带「（示例）」的不是重训 app 目录里
+  // 的真实数据，是为了让地图上每块肌肉都点得出东西，凑出来的常见动作。
+  var GROUPS = {
+    chest:      { label: '胸',    color: 'var(--c-chest)',      exercises: [
+      { name: '卧推', meta: '20kg · 1 热身 + 4 正式' }
+    ]},
+    back:       { label: '背',    color: 'var(--c-back)',       exercises: [
+      { name: '高位下拉', meta: '25kg · 4 正式' },
+      { name: '宽距划船', meta: '22.5kg · 4 正式' },
+      { name: '传统硬拉', meta: '40kg · 1 热身 + 4 正式 · 后链复合动作' }
+    ]},
+    shoulders:  { label: '肩',    color: 'var(--c-shoulders)',  exercises: [
+      { name: '侧平举', meta: '4kg×2 · 4 正式' },
+      { name: '肩背中束面拉', meta: '档位 18.1kg · 4 正式' }
+    ]},
+    biceps:     { label: '二头肌', color: 'var(--c-biceps)',    exercises: [
+      { name: '杠铃弯举', meta: '4 正式', demo: true }
+    ]},
+    triceps:    { label: '三头肌', color: 'var(--c-triceps)',   exercises: [
+      { name: '绳索下压', meta: '4 正式', demo: true }
+    ]},
+    abs:        { label: '腹',    color: 'var(--c-abs)',        exercises: [
+      { name: '卷腹', meta: '3 正式', demo: true }
+    ]},
+    glutes:     { label: '臀',    color: 'var(--c-glutes)',     exercises: [
+      { name: '保加利亚单腿蹲', meta: '4kg · 左右分计 · 4 正式' }
+    ]},
+    quads:      { label: '股四头肌', color: 'var(--c-quads)',   exercises: [
+      { name: '保加利亚单腿蹲', meta: '4kg · 左右分计 · 4 正式' }
+    ]},
+    hamstrings: { label: '腘绳肌', color: 'var(--c-hamstrings)', exercises: [
+      { name: '传统硬拉', meta: '40kg · 1 热身 + 4 正式' }
+    ]},
+    calves:     { label: '小腿',  color: 'var(--c-calves)',     exercises: [
+      { name: '提踵', meta: '4 正式', demo: true },
+      { name: '爬坡走', meta: '20 分钟 · 有氧' }
+    ]}
+  };
+  var ORDER = ['chest', 'back', 'shoulders', 'biceps', 'triceps', 'abs', 'glutes', 'quads', 'hamstrings', 'calves'];
+
+  var panel = document.getElementById('panel');
+  var legend = document.getElementById('legend');
+  var tooltip = document.getElementById('tooltip');
+  var active = null;
+
+  function dotHtml(color) {
+    return '<span class="dot" style="background:' + color + '"></span>';
+  }
+
+  function renderLegend() {
+    legend.innerHTML = ORDER.map(function (key) {
+      var g = GROUPS[key];
+      return '<button class="legend-item' + (active === key ? ' is-active' : '') + '" data-legend="' + key + '">' +
+        dotHtml(g.color) + '<span>' + g.label + '</span></button>';
+    }).join('');
+  }
+
+  function exCardHtml(key, ex) {
+    var g = GROUPS[key];
+    return '<li class="ex-card" style="--c:' + g.color + '">' +
+      '<div class="ex-name">' + ex.name + (ex.demo ? '<span class="ex-demo-tag">（示例）</span>' : '') + '</div>' +
+      '<div class="ex-meta">' + ex.meta + '</div>' +
+      '</li>';
+  }
+
+  function renderPanel() {
+    if (!active) {
+      var allHtml = ORDER.map(function (key) {
+        var g = GROUPS[key];
+        return g.exercises.map(function (ex) { return exCardHtml(key, ex); }).join('');
+      }).join('');
+      panel.innerHTML =
+        '<p class="panel-hint">点左边身体任意部位，或者下面的图例，看这个部位现在都练什么。</p>' +
+        '<div class="full-list-head">全部部位 · 一眼看配色</div>' +
+        '<ul class="ex-list">' + allHtml + '</ul>';
+      return;
+    }
+    var g = GROUPS[active];
+    panel.innerHTML =
+      '<div class="panel-head">' +
+        '<div class="panel-title">' + dotHtml(g.color) + '<h2>' + g.label + '</h2>' +
+        '<span class="panel-count">' + g.exercises.length + ' 项</span></div>' +
+        '<button class="clear-btn" id="clear-btn">清除</button>' +
+      '</div>' +
+      '<ul class="ex-list">' + g.exercises.map(function (ex) { return exCardHtml(active, ex); }).join('') + '</ul>';
+    document.getElementById('clear-btn').addEventListener('click', function () { select(null); });
+  }
+
+  function paintShapes() {
+    document.querySelectorAll('.mgroup').forEach(function (el) {
+      var key = el.getAttribute('data-group');
+      el.style.setProperty('--c', GROUPS[key].color);
+      el.style.fill = 'var(--c)';
+      el.classList.toggle('is-active', active === key);
+      el.classList.toggle('is-dimmed', !!active && active !== key);
+      if (active === key) {
+        el.style.stroke = GROUPS[key].color;
+      } else {
+        el.style.stroke = '';
+      }
+    });
+  }
+
+  function select(key) {
+    active = (active === key) ? null : key;
+    paintShapes();
+    renderLegend();
+    renderPanel();
+  }
+
+  document.querySelectorAll('.mgroup').forEach(function (el) {
+    el.addEventListener('click', function () { select(el.getAttribute('data-group')); });
+    el.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        select(el.getAttribute('data-group'));
+      }
+    });
+    el.addEventListener('pointerenter', function (e) {
+      if (e.pointerType === 'touch') return;
+      var key = el.getAttribute('data-group');
+      tooltip.textContent = GROUPS[key].label;
+      tooltip.hidden = false;
+    });
+    el.addEventListener('pointermove', function (e) {
+      if (e.pointerType === 'touch') return;
+      tooltip.style.left = e.clientX + 'px';
+      tooltip.style.top = e.clientY + 'px';
+    });
+    el.addEventListener('pointerleave', function () { tooltip.hidden = true; });
+  });
+
+  legend.addEventListener('click', function (e) {
+    var btn = e.target.closest('[data-legend]');
+    if (btn) select(btn.getAttribute('data-legend'));
+  });
+
+  paintShapes();
+  renderLegend();
+  renderPanel();
+</script>

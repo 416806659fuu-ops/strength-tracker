@@ -1,0 +1,462 @@
+<meta charset="UTF-8">
+<title>肌肉地图 v2 · 平滑手绘6部位版（存档）</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root {
+    --bg: #eef0f3;
+    --surface: #ffffff;
+    --surface-2: #f5f6f8;
+    --border: #dde1e6;
+    --text: #20242b;
+    --text-muted: #676d78;
+    --text-faint: #9aa0aa;
+    --line: rgba(32, 36, 43, 0.55);
+    --line-soft: rgba(32, 36, 43, 0.22);
+    --line-faint: rgba(32, 36, 43, 0.13);
+    --skin: rgba(32, 36, 43, 0.045);
+    --focus: #20242b;
+    --shadow: 0 1px 2px rgba(20, 22, 26, 0.04), 0 8px 24px rgba(20, 22, 26, 0.06);
+
+    --c-chest: #d97757;
+    --c-back: #4f9d8f;
+    --c-shoulders: #6b8fd4;
+    --c-abs: #d4574f;
+    --c-glutes: #c9598f;
+    --c-legs: #7fb856;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #15171b;
+      --surface: #1c1f25;
+      --surface-2: #22252c;
+      --border: #2b2f37;
+      --text: #e8eaed;
+      --text-muted: #9aa0aa;
+      --text-faint: #6b7078;
+      --line: rgba(232, 234, 237, 0.6);
+      --line-soft: rgba(232, 234, 237, 0.24);
+      --line-faint: rgba(232, 234, 237, 0.13);
+      --skin: rgba(232, 234, 237, 0.055);
+      --focus: #e8eaed;
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.35);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #15171b;
+    --surface: #1c1f25;
+    --surface-2: #22252c;
+    --border: #2b2f37;
+    --text: #e8eaed;
+    --text-muted: #9aa0aa;
+    --text-faint: #6b7078;
+    --line: rgba(232, 234, 237, 0.6);
+    --line-soft: rgba(232, 234, 237, 0.24);
+    --line-faint: rgba(232, 234, 237, 0.13);
+    --skin: rgba(232, 234, 237, 0.055);
+    --focus: #e8eaed;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.35);
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Segoe UI", sans-serif;
+    line-height: 1.5;
+    padding: 28px 20px 60px;
+  }
+  .wrap { max-width: 980px; margin: 0 auto; }
+
+  header { margin-bottom: 24px; }
+  .eyebrow {
+    display: inline-block;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 4px 12px;
+    margin: 0 0 14px;
+  }
+  h1 { font-size: 24px; font-weight: 700; margin: 0 0 8px; text-wrap: balance; }
+  .lede { font-size: 14px; color: var(--text-muted); max-width: 62ch; margin: 0; }
+
+  main {
+    display: grid;
+    grid-template-columns: minmax(0, 1.15fr) minmax(280px, 0.85fr);
+    gap: 20px;
+    align-items: start;
+    margin-top: 24px;
+  }
+  @media (max-width: 780px) { main { grid-template-columns: 1fr; } }
+
+  .diagram-pane {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 20px;
+    box-shadow: var(--shadow);
+  }
+  .figures { display: flex; gap: 20px; justify-content: center; }
+  figure { margin: 0; text-align: center; flex: 1; min-width: 0; max-width: 230px; }
+  figure svg { width: 100%; height: auto; display: block; touch-action: manipulation; }
+  figcaption { margin-top: 6px; font-size: 12px; color: var(--text-faint); font-weight: 600; letter-spacing: 0.02em; }
+
+  .mgroup { cursor: pointer; fill-opacity: 0; stroke: var(--line); stroke-width: 1.6; stroke-linejoin: round; transition: fill-opacity 160ms ease, stroke 160ms ease, opacity 160ms ease; }
+  .mgroup:hover { fill-opacity: 0.22; }
+  .mgroup.is-active { fill-opacity: 0.32; stroke-width: 2.2; }
+  .mgroup.is-dimmed { opacity: 0.3; }
+  .mgroup:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  .neutral-part { fill: var(--skin); stroke: var(--line); stroke-width: 1.4; stroke-linejoin: round; pointer-events: none; }
+  .detail-line { stroke: var(--line-faint); stroke-width: 1; fill: none; pointer-events: none; stroke-linecap: round; }
+
+  .legend {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+    gap: 6px;
+    margin-top: 18px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+  }
+  .legend-item {
+    display: flex; align-items: center; gap: 7px;
+    font-size: 12.5px; color: var(--text-muted);
+    background: none; border: 1px solid transparent; border-radius: 8px;
+    padding: 5px 7px; cursor: pointer; text-align: left; font-family: inherit;
+  }
+  .legend-item:hover { background: var(--surface-2); }
+  .legend-item.is-active { background: var(--surface-2); border-color: var(--border); color: var(--text); font-weight: 600; }
+  .legend-item:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+
+  .panel {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
+    padding: 20px; box-shadow: var(--shadow); position: sticky; top: 20px;
+  }
+  .panel-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 14px; }
+  .panel-title { display: flex; align-items: center; gap: 9px; min-width: 0; }
+  .panel-title .dot { width: 13px; height: 13px; }
+  .panel-title h2 { font-size: 17px; margin: 0; font-weight: 700; }
+  .panel-count { font-size: 12px; color: var(--text-faint); font-variant-numeric: tabular-nums; }
+  .clear-btn {
+    font-size: 12.5px; color: var(--text-muted); background: var(--surface-2);
+    border: 1px solid var(--border); border-radius: 8px; padding: 5px 10px;
+    cursor: pointer; font-family: inherit; flex: none;
+  }
+  .clear-btn:hover { color: var(--text); }
+  .panel-hint { font-size: 13px; color: var(--text-muted); margin: 0 0 16px; }
+
+  .ex-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+  .ex-card { border: 1px solid var(--border); border-left: 4px solid var(--c); border-radius: 10px; padding: 9px 12px; background: var(--surface-2); }
+  .ex-name { font-size: 14px; font-weight: 600; display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+  .ex-demo-tag { font-size: 11px; font-weight: 500; color: var(--text-faint); }
+  .ex-meta { font-size: 12.5px; color: var(--text-muted); margin-top: 2px; font-variant-numeric: tabular-nums; }
+
+  .full-list-head { font-size: 12px; font-weight: 600; color: var(--text-faint); letter-spacing: 0.02em; margin: 18px 0 8px; }
+
+  .tooltip {
+    position: fixed; pointer-events: none; background: var(--text); color: var(--bg);
+    font-size: 12px; font-weight: 600; padding: 4px 9px; border-radius: 6px;
+    transform: translate(-50%, -130%); white-space: nowrap; z-index: 20;
+  }
+  .tooltip[hidden] { display: none; }
+
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <span class="eyebrow">重训 app 设计测试页 · 不连后端 · 不进正式版本</span>
+    <h1>点一块部位，看看练它都用什么动作</h1>
+    <p class="lede">现在训练卡片的颜色只是按加入顺序循环分配的。这一版试着换个逻辑：颜色跟着身体部位走，大腿小腿一起算「腿」、肩膀手臂一起算「肩臂」，同一个部位不管哪天练，颜色都是固定的那一个。</p>
+  </header>
+
+  <main>
+    <section class="diagram-pane">
+      <div class="figures">
+        <figure>
+          <svg id="svg-front" viewBox="0 0 240 620" aria-label="人体正面示意图"></svg>
+          <figcaption>正面</figcaption>
+        </figure>
+        <figure>
+          <svg id="svg-back" viewBox="0 0 240 620" aria-label="人体背面示意图"></svg>
+          <figcaption>背面</figcaption>
+        </figure>
+      </div>
+      <div class="legend" id="legend"></div>
+    </section>
+
+    <aside class="panel" id="panel"></aside>
+  </main>
+</div>
+
+<div class="tooltip" id="tooltip" hidden></div>
+
+<script>
+  // ---------- 部位数据 ----------
+  // 「（示例）」标的不是重训 app 目录里的真实项目，是为了让每块部位都点得
+  // 出东西凑出来的常见动作；其它都是目录里真实的。
+  var GROUPS = {
+    chest:     { label: '胸',   color: 'var(--c-chest)',     exercises: [
+      { name: '卧推', meta: '20kg · 1 热身 + 4 正式' }
+    ]},
+    back:      { label: '背',   color: 'var(--c-back)',      exercises: [
+      { name: '高位下拉', meta: '25kg · 4 正式' },
+      { name: '宽距划船', meta: '22.5kg · 4 正式' },
+      { name: '传统硬拉', meta: '40kg · 1 热身 + 4 正式 · 后链复合动作' }
+    ]},
+    shoulders: { label: '肩 / 手臂', color: 'var(--c-shoulders)', exercises: [
+      { name: '侧平举', meta: '4kg×2 · 4 正式' },
+      { name: '肩背中束面拉', meta: '档位 18.1kg · 4 正式' },
+      { name: '杠铃弯举', meta: '4 正式', demo: true },
+      { name: '绳索下压', meta: '4 正式', demo: true }
+    ]},
+    abs:       { label: '腹',   color: 'var(--c-abs)',       exercises: [
+      { name: '卷腹', meta: '3 正式', demo: true }
+    ]},
+    glutes:    { label: '臀',   color: 'var(--c-glutes)',    exercises: [
+      { name: '保加利亚单腿蹲', meta: '4kg · 左右分计 · 4 正式' }
+    ]},
+    legs:      { label: '腿',   color: 'var(--c-legs)',      exercises: [
+      { name: '保加利亚单腿蹲', meta: '4kg · 左右分计 · 4 正式' },
+      { name: '传统硬拉', meta: '40kg · 1 热身 + 4 正式 · 后链复合动作' },
+      { name: '提踵', meta: '4 正式', demo: true },
+      { name: '爬坡走', meta: '20 分钟 · 有氧' }
+    ]}
+  };
+  var ORDER = ['chest', 'back', 'shoulders', 'abs', 'glutes', 'legs'];
+
+  // ---------- 用 Catmull-Rom → 三次贝塞尔，把一串"脊线关键点(x,y,宽度)"
+  // 生成一条平滑的四肢轮廓路径，不用手算长长的贝塞尔坐标 ----------
+  function catmullBezierSeg(p0, p1, p2, p3) {
+    var c1x = p1[0] + (p2[0] - p0[0]) / 6;
+    var c1y = p1[1] + (p2[1] - p0[1]) / 6;
+    var c2x = p2[0] - (p3[0] - p1[0]) / 6;
+    var c2y = p2[1] - (p3[1] - p1[1]) / 6;
+    return ' C ' + c1x.toFixed(2) + ',' + c1y.toFixed(2) + ' ' + c2x.toFixed(2) + ',' + c2y.toFixed(2) + ' ' + p2[0].toFixed(2) + ',' + p2[1].toFixed(2);
+  }
+  // 把整条轮廓当成一圈闭合点来平滑（首尾用取模循环取邻居），两端的"帽子"
+  // 才会拢成圆角而不是尖角——之前分两段各自平滑，两段接缝处切线不连续，
+  // 肢体末端（手/脚）就会拱成一个尖点。
+  function smoothClosedLoop(pts) {
+    var n = pts.length;
+    var d = '';
+    for (var i = 0; i < n; i++) {
+      var p0 = pts[(i - 1 + n) % n];
+      var p1 = pts[i];
+      var p2 = pts[(i + 1) % n];
+      var p3 = pts[(i + 2) % n];
+      d += catmullBezierSeg(p0, p1, p2, p3);
+    }
+    return d;
+  }
+  // spine: [{x,y,w}, ...] 从躯干端到末梢端。生成一条闭合的锥形肢体轮廓。
+  function limbPath(spine) {
+    var n = spine.length;
+    var left = [], right = [];
+    for (var i = 0; i < n; i++) {
+      var prev = spine[Math.max(0, i - 1)];
+      var next = spine[Math.min(n - 1, i + 1)];
+      var dx = next.x - prev.x, dy = next.y - prev.y;
+      var len = Math.hypot(dx, dy) || 1;
+      var nx = -dy / len, ny = dx / len;
+      var hw = spine[i].w / 2;
+      left.push([spine[i].x + nx * hw, spine[i].y + ny * hw]);
+      right.push([spine[i].x - nx * hw, spine[i].y - ny * hw]);
+    }
+    var startTan = normalize(spine[1].x - spine[0].x, spine[1].y - spine[0].y);
+    var endTan = normalize(spine[n - 1].x - spine[n - 2].x, spine[n - 1].y - spine[n - 2].y);
+    var capNear = [spine[0].x - startTan[0] * spine[0].w * 0.32, spine[0].y - startTan[1] * spine[0].w * 0.32];
+    var capFar = [spine[n - 1].x + endTan[0] * spine[n - 1].w * 0.4, spine[n - 1].y + endTan[1] * spine[n - 1].w * 0.4];
+
+    var loop = left.concat([capFar]).concat(right.slice().reverse()).concat([capNear]);
+    var d = 'M ' + loop[0][0].toFixed(2) + ',' + loop[0][1].toFixed(2);
+    d += smoothClosedLoop(loop);
+    d += ' Z';
+    return d;
+  }
+  function normalize(x, y) { var l = Math.hypot(x, y) || 1; return [x / l, y / l]; }
+  function mirror(spine) { return spine.map(function (p) { return { x: 240 - p.x, y: p.y, w: p.w }; }); }
+
+  // ---------- 四肢脊线关键点（右侧；左侧用 mirror() 镜像） ----------
+  var ARM_R = [
+    { x: 160, y: 112, w: 40 },
+    { x: 199, y: 148, w: 30 },
+    { x: 203, y: 188, w: 26 },
+    { x: 199, y: 228, w: 22 },
+    { x: 193, y: 254, w: 19 },
+    { x: 197, y: 292, w: 21 },
+    { x: 205, y: 332, w: 19 },
+    { x: 212, y: 366, w: 17 },
+    { x: 219, y: 390, w: 24 },
+    { x: 224, y: 410, w: 27 }
+  ];
+  var LEG_R = [
+    { x: 148, y: 288, w: 56 },
+    { x: 148, y: 340, w: 45 },
+    { x: 144, y: 386, w: 38 },
+    { x: 140, y: 424, w: 29 },
+    { x: 142, y: 458, w: 34 },
+    { x: 144, y: 496, w: 30 },
+    { x: 142, y: 528, w: 22 },
+    { x: 140, y: 548, w: 25 },
+    { x: 137, y: 562, w: 32 }
+  ];
+
+  function svgEl(tag, attrs) {
+    var el = document.createElementNS('http://www.w3.org/2000/svg', tag);
+    for (var k in attrs) el.setAttribute(k, attrs[k]);
+    return el;
+  }
+
+  // ---------- 躯干（正面：胸+腹；背面：背+臀），手写少量平滑曲线 ----------
+  var TORSO_BACKDROP_D = 'M74,118 C74,116 92,110 120,110 C148,110 166,116 166,118 L173,158 C176,178 171,198 164,214 L157,272 C153,290 138,302 120,302 C102,302 87,290 83,272 L76,214 C69,198 64,178 67,158 Z';
+
+  function buildFront(svg) {
+    // 头/颈（非交互）
+    svg.appendChild(svgEl('circle', { class: 'neutral-part', cx: 120, cy: 56, r: 30 }));
+    svg.appendChild(svgEl('rect', { class: 'neutral-part', x: 108, y: 82, width: 24, height: 20, rx: 8 }));
+    // 躯干底层（皮肤色衬底，让胸/腹形状看起来落在身体上）
+    svg.appendChild(svgEl('path', { class: 'neutral-part', d: TORSO_BACKDROP_D }));
+
+    // 肩+手臂（一条完整肢体，data-group=shoulders）
+    [ARM_R, mirror(ARM_R)].forEach(function (spine) {
+      svg.appendChild(svgEl('path', { class: 'mgroup', 'data-group': 'shoulders', tabindex: 0, role: 'button', 'aria-label': '肩/手臂', d: limbPath(spine) }));
+    });
+
+    // 胸（胸大肌，两瓣）
+    svg.appendChild(svgEl('ellipse', { class: 'mgroup', 'data-group': 'chest', tabindex: 0, role: 'button', 'aria-label': '胸', cx: 100, cy: 146, rx: 24, ry: 20 }));
+    svg.appendChild(svgEl('ellipse', { class: 'mgroup', 'data-group': 'chest', tabindex: 0, role: 'button', 'aria-label': '胸', cx: 140, cy: 146, rx: 24, ry: 20 }));
+    svg.appendChild(svgEl('path', { class: 'detail-line', d: 'M120,128 L120,168' }));
+
+    // 腹（腹直肌，带六块腹肌装饰线）
+    svg.appendChild(svgEl('rect', { class: 'mgroup', 'data-group': 'abs', tabindex: 0, role: 'button', 'aria-label': '腹', x: 96, y: 170, width: 48, height: 92, rx: 16 }));
+    svg.appendChild(svgEl('path', { class: 'detail-line', d: 'M120,174 L120,258' }));
+    [190, 210, 232].forEach(function (y) {
+      svg.appendChild(svgEl('path', { class: 'detail-line', d: 'M101,' + y + ' L139,' + y }));
+    });
+
+    // 腿
+    [LEG_R, mirror(LEG_R)].forEach(function (spine) {
+      svg.appendChild(svgEl('path', { class: 'mgroup', 'data-group': 'legs', tabindex: 0, role: 'button', 'aria-label': '腿', d: limbPath(spine) }));
+      var knee = spine[3];
+      svg.appendChild(svgEl('path', { class: 'detail-line', d: 'M' + (knee.x - 10) + ',' + knee.y + ' Q' + knee.x + ',' + (knee.y + 6) + ' ' + (knee.x + 10) + ',' + knee.y }));
+    });
+  }
+
+  function buildBack(svg) {
+    svg.appendChild(svgEl('circle', { class: 'neutral-part', cx: 120, cy: 56, r: 30 }));
+    svg.appendChild(svgEl('rect', { class: 'neutral-part', x: 108, y: 82, width: 24, height: 20, rx: 8 }));
+
+    // 背（斜方+背阔，整片躯干轮廓本身就是背这个分组）
+    svg.appendChild(svgEl('path', { class: 'mgroup', 'data-group': 'back', tabindex: 0, role: 'button', 'aria-label': '背', d: TORSO_BACKDROP_D }));
+    svg.appendChild(svgEl('path', { class: 'detail-line', d: 'M120,118 Q123,190 120,266' }));
+    svg.appendChild(svgEl('path', { class: 'detail-line', d: 'M120,122 Q100,132 92,150' }));
+    svg.appendChild(svgEl('path', { class: 'detail-line', d: 'M120,122 Q140,132 148,150' }));
+    svg.appendChild(svgEl('path', { class: 'detail-line', d: 'M78,180 Q100,220 118,260' }));
+    svg.appendChild(svgEl('path', { class: 'detail-line', d: 'M162,180 Q140,220 122,260' }));
+
+    // 肩+手臂
+    [ARM_R, mirror(ARM_R)].forEach(function (spine) {
+      svg.appendChild(svgEl('path', { class: 'mgroup', 'data-group': 'shoulders', tabindex: 0, role: 'button', 'aria-label': '肩/手臂', d: limbPath(spine) }));
+    });
+
+    // 臀
+    svg.appendChild(svgEl('ellipse', { class: 'mgroup', 'data-group': 'glutes', tabindex: 0, role: 'button', 'aria-label': '臀', cx: 120, cy: 292, rx: 50, ry: 26 }));
+    svg.appendChild(svgEl('path', { class: 'detail-line', d: 'M120,270 L120,314' }));
+
+    // 腿
+    [LEG_R, mirror(LEG_R)].forEach(function (spine) {
+      svg.appendChild(svgEl('path', { class: 'mgroup', 'data-group': 'legs', tabindex: 0, role: 'button', 'aria-label': '腿', d: limbPath(spine) }));
+      var calf = spine[5];
+      svg.appendChild(svgEl('path', { class: 'detail-line', d: 'M' + (calf.x - 8) + ',' + (calf.y - 14) + ' Q' + calf.x + ',' + calf.y + ' ' + (calf.x - 8) + ',' + (calf.y + 14) }));
+    });
+  }
+
+  buildFront(document.getElementById('svg-front'));
+  buildBack(document.getElementById('svg-back'));
+
+  // ---------- 交互（点击/键盘/悬浮 tooltip/图例/右侧面板） ----------
+  var panel = document.getElementById('panel');
+  var legend = document.getElementById('legend');
+  var tooltip = document.getElementById('tooltip');
+  var active = null;
+
+  function dotHtml(color) { return '<span class="dot" style="background:' + color + '"></span>'; }
+
+  function renderLegend() {
+    legend.innerHTML = ORDER.map(function (key) {
+      var g = GROUPS[key];
+      return '<button class="legend-item' + (active === key ? ' is-active' : '') + '" data-legend="' + key + '">' +
+        dotHtml(g.color) + '<span>' + g.label + '</span></button>';
+    }).join('');
+  }
+  function exCardHtml(key, ex) {
+    var g = GROUPS[key];
+    return '<li class="ex-card" style="--c:' + g.color + '">' +
+      '<div class="ex-name">' + ex.name + (ex.demo ? '<span class="ex-demo-tag">（示例）</span>' : '') + '</div>' +
+      '<div class="ex-meta">' + ex.meta + '</div></li>';
+  }
+  function renderPanel() {
+    if (!active) {
+      var allHtml = ORDER.map(function (key) {
+        return GROUPS[key].exercises.map(function (ex) { return exCardHtml(key, ex); }).join('');
+      }).join('');
+      panel.innerHTML =
+        '<p class="panel-hint">点左边身体任意部位，或者下面的图例，看这个部位现在都练什么。</p>' +
+        '<div class="full-list-head">全部部位 · 一眼看配色</div>' +
+        '<ul class="ex-list">' + allHtml + '</ul>';
+      return;
+    }
+    var g = GROUPS[active];
+    panel.innerHTML =
+      '<div class="panel-head"><div class="panel-title">' + dotHtml(g.color) + '<h2>' + g.label + '</h2>' +
+      '<span class="panel-count">' + g.exercises.length + ' 项</span></div>' +
+      '<button class="clear-btn" id="clear-btn">清除</button></div>' +
+      '<ul class="ex-list">' + g.exercises.map(function (ex) { return exCardHtml(active, ex); }).join('') + '</ul>';
+    document.getElementById('clear-btn').addEventListener('click', function () { select(null); });
+  }
+  function paintShapes() {
+    document.querySelectorAll('.mgroup').forEach(function (el) {
+      var key = el.getAttribute('data-group');
+      el.style.setProperty('--c', GROUPS[key].color);
+      el.style.fill = 'var(--c)';
+      el.classList.toggle('is-active', active === key);
+      el.classList.toggle('is-dimmed', !!active && active !== key);
+      el.style.stroke = active === key ? GROUPS[key].color : '';
+    });
+  }
+  function select(key) {
+    active = (active === key) ? null : key;
+    paintShapes();
+    renderLegend();
+    renderPanel();
+  }
+  document.querySelectorAll('.mgroup').forEach(function (el) {
+    el.addEventListener('click', function () { select(el.getAttribute('data-group')); });
+    el.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); select(el.getAttribute('data-group')); }
+    });
+    el.addEventListener('pointerenter', function (e) {
+      if (e.pointerType === 'touch') return;
+      tooltip.textContent = GROUPS[el.getAttribute('data-group')].label;
+      tooltip.hidden = false;
+    });
+    el.addEventListener('pointermove', function (e) {
+      if (e.pointerType === 'touch') return;
+      tooltip.style.left = e.clientX + 'px';
+      tooltip.style.top = e.clientY + 'px';
+    });
+    el.addEventListener('pointerleave', function () { tooltip.hidden = true; });
+  });
+  legend.addEventListener('click', function (e) {
+    var btn = e.target.closest('[data-legend]');
+    if (btn) select(btn.getAttribute('data-legend'));
+  });
+
+  paintShapes();
+  renderLegend();
+  renderPanel();
+</script>
