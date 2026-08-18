@@ -14,9 +14,10 @@
 const REPS_MIN = 1;
 const REPS_MAX = 30;
 
-// 进度条上每个动作一种颜色，循环使用
-// 设计稿（Ver.1.0.6）的四色：橙 / 绿 / 蓝 / 红，进度条和圆点共用
-const EXERCISE_COLORS = ['#d68b41', '#7bc865', '#6595c8', '#d94b4f', '#1baf7a'];
+// 进度条/圆点/确认页每个动作的颜色，原来是按当天列表里的第几个循环分配
+// （跟动作是谁无关，同一个动作今天蓝色明天可能就变橙色）。现在颜色跟着
+// 「练哪个部位」走，查 muscle-data.js 的 exerciseColor(ex)，同一个动作
+// 不管哪天练、排第几个，颜色都固定。
 
 let sessionWeight = null; // 当前组的重量，随 −/+ 变化
 let sessionReps = null; // 滚轮当前停在哪个数
@@ -310,7 +311,7 @@ function renderPlanChooser(body) {
   const dots = (sp) =>
     exercisesForSplit(sp)
       .slice(0, 4)
-      .map((ex, i) => `<span style="background:${EXERCISE_COLORS[i % EXERCISE_COLORS.length]}"></span>`)
+      .map((ex) => `<span style="background:${exerciseColor(ex)}"></span>`)
       .join('');
   // 4 行网格（Figma layoutGrids：4 行 × 203.5，沟 20）：
   // 标题第 1 行、A 第 2 行、B 第 3 行，第 4 行留空 —— A/B 落在画面中段
@@ -339,9 +340,9 @@ function renderPlanConfirm(body) {
   const list = exercisesForSplit(pendingSplit);
   const rows = list
     .map(
-      (ex, i) => `
+      (ex) => `
       <div class="confirm-item">
-        <span class="ci-dot" style="background:${EXERCISE_COLORS[i % EXERCISE_COLORS.length]}"></span>
+        <span class="ci-dot" style="background:${exerciseColor(ex)}"></span>
         <span class="ci-name">${esc(ex.name)}</span>
         <span class="ci-min">${estimateMinutes(ex)}min</span>
       </div>`
@@ -641,7 +642,7 @@ function renderProgressBar(list, curIdx) {
   const bar = document.getElementById('session-progress');
   bar.innerHTML = list
     .map((item, i) => {
-      const color = EXERCISE_COLORS[i % EXERCISE_COLORS.length];
+      const color = exerciseColor(item.ex);
       const pct = item.planned ? Math.min(100, (item.done / item.planned) * 100) : 0;
       const isCur = i === curIdx;
       return `
@@ -733,7 +734,7 @@ function renderSession() {
 
   const item = list[pos.exIdx];
   const ex = item.ex;
-  const color = EXERCISE_COLORS[pos.exIdx % EXERCISE_COLORS.length];
+  const color = exerciseColor(ex);
   renderProgressBar(list, pos.exIdx);
 
   // 真的换了一组（不是同一组内左→右的过渡重绘）才把左右分计的进度打回左边

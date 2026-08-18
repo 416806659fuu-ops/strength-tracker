@@ -705,15 +705,18 @@ const WEIGHT_MODES = [
 ];
 
 // 你现在真正在练的：A 计划练腿 4 项，B 计划胸背 3 项 + 爬坡走有氧。顺序固定。
+// muscleGroup 对应「练哪个部位」选择器里的 6 个分组，训练卡片的颜色从这
+// 里查（见 muscle-data.js 的 exerciseColor()）——传统硬拉是后链复合动作，
+// 归到「腿」（跟当前 A 计划练腿的定位一致），保加利亚单腿蹲同理。
 const SEED_CATALOG = [
-  { name: '传统硬拉', split: 'A', kind: 'strength', weightMode: 'single', weight: 40, step: 2.5, warmupSets: 1, workSets: 4 },
-  { name: '保加利亚单腿蹲', split: 'A', kind: 'strength', weightMode: 'unilateral', weight: 4, step: 1, warmupSets: 0, workSets: 4 },
-  { name: '侧平举', split: 'A', kind: 'strength', weightMode: 'pair', weight: 4, step: 1, warmupSets: 0, workSets: 4 },
-  { name: '肩背中束面拉', split: 'A', kind: 'strength', weightMode: 'level', weight: 18.1, levels: [14.7, 16.97, 18.1], warmupSets: 0, workSets: 4 },
-  { name: '卧推', split: 'B', kind: 'strength', weightMode: 'single', weight: 20, step: 2.5, warmupSets: 1, workSets: 4 },
-  { name: '高位下拉', split: 'B', kind: 'strength', weightMode: 'single', weight: 25, step: 2.5, warmupSets: 0, workSets: 4 },
-  { name: '宽距划船', split: 'B', kind: 'strength', weightMode: 'single', weight: 22.5, step: 2.5, warmupSets: 0, workSets: 4 },
-  { name: '爬坡走', split: 'B', kind: 'cardio', durationMin: 20 },
+  { name: '传统硬拉', split: 'A', kind: 'strength', weightMode: 'single', weight: 40, step: 2.5, warmupSets: 1, workSets: 4, muscleGroup: 'legs' },
+  { name: '保加利亚单腿蹲', split: 'A', kind: 'strength', weightMode: 'unilateral', weight: 4, step: 1, warmupSets: 0, workSets: 4, muscleGroup: 'legs' },
+  { name: '侧平举', split: 'A', kind: 'strength', weightMode: 'pair', weight: 4, step: 1, warmupSets: 0, workSets: 4, muscleGroup: 'shoulders' },
+  { name: '肩背中束面拉', split: 'A', kind: 'strength', weightMode: 'level', weight: 18.1, levels: [14.7, 16.97, 18.1], warmupSets: 0, workSets: 4, muscleGroup: 'shoulders' },
+  { name: '卧推', split: 'B', kind: 'strength', weightMode: 'single', weight: 20, step: 2.5, warmupSets: 1, workSets: 4, muscleGroup: 'chest' },
+  { name: '高位下拉', split: 'B', kind: 'strength', weightMode: 'single', weight: 25, step: 2.5, warmupSets: 0, workSets: 4, muscleGroup: 'back' },
+  { name: '宽距划船', split: 'B', kind: 'strength', weightMode: 'single', weight: 22.5, step: 2.5, warmupSets: 0, workSets: 4, muscleGroup: 'back' },
+  { name: '爬坡走', split: 'B', kind: 'cardio', durationMin: 20, muscleGroup: 'legs' },
 ];
 
 // 这个动作被多少天的记录引用了。有引用就不能删，
@@ -939,6 +942,17 @@ function renderExerciseDetail() {
         <button class="pill kind-btn${!cardio ? ' active' : ''}" data-kind="strength">力量</button>
         <button class="pill kind-btn${cardio ? ' active' : ''}" data-kind="cardio">有氧</button>
       </div>`
+    )}
+    ${detailField(
+      '练哪个部位',
+      '决定这个动作在训练页/历史里显示的颜色。点身体图比在 6 个文字标签里找快。',
+      `<div class="muscle-picker" id="muscle-picker">
+        <div class="mp-figures">
+          <svg id="mp-front" aria-label="正面选择"></svg>
+          <svg id="mp-back" aria-label="背面选择"></svg>
+        </div>
+        <div class="mp-status" id="mp-status"></div>
+      </div>`
     )}`;
 
   // 没有「归档」这个中间状态了——目录里的动作要么在（对之后每次训练都生效，
@@ -961,6 +975,7 @@ function renderExerciseDetail() {
     ${dangerBlock}`;
 
   document.getElementById('detail-title').textContent = rawEx.name;
+  if (window.initMusclePicker) window.initMusclePicker(); // 仅本次模式下 identityBlock 是空的，函数内部会自己判断有没有挂载点
 }
 
 function parseLevels(raw) {
@@ -1015,6 +1030,13 @@ function initExerciseDetail() {
       renderExerciseDetail();
       return;
     }
+    const mpRegion = e.target.closest('.mp-region');
+    if (mpRegion) {
+      ex.muscleGroup = mpRegion.getAttribute('data-group');
+      markDirty();
+      renderExerciseDetail(); // 走完整重渲染，跟这个文件里其它选择器（计重方式/计划/类型）一个套路
+      return;
+    }
     const kindBtn = e.target.closest('.kind-btn');
     if (kindBtn) {
       ex.kind = kindBtn.dataset.kind;
@@ -1042,6 +1064,20 @@ function initExerciseDetail() {
       markDirty();
       closeExerciseDetail();
     }
+  });
+
+  // 「练哪个部位」的图是 SVG <path>，不是原生 <button>，Enter/空格默认不会
+  // 触发点击，这里手动补上（其它 pill 按钮本来就是 <button>，浏览器自带）
+  body.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const mpRegion = e.target.closest('.mp-region');
+    if (!mpRegion) return;
+    e.preventDefault();
+    const ex = exerciseById(detailExId);
+    if (!ex) return;
+    ex.muscleGroup = mpRegion.getAttribute('data-group');
+    markDirty();
+    renderExerciseDetail();
   });
 
   body.addEventListener('change', (e) => {

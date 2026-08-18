@@ -722,6 +722,24 @@ main {
 }
 .detail-danger .settings-btn[disabled] { opacity: 0.35; }
 
+/* 「练哪个部位」快速选择器（muscle-data.js 生成内容）。坐标系很小，用
+   non-scaling-stroke 让线宽不随 viewBox 缩放。 */
+.muscle-picker { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.mp-figures { display: flex; gap: 18px; justify-content: center; }
+.mp-figures svg { height: 150px; width: auto; max-width: 100%; display: block; touch-action: manipulation; }
+.mp-region {
+  cursor: pointer; fill-opacity: 0; stroke: var(--baseline);
+  stroke-width: 1; vector-effect: non-scaling-stroke; stroke-linejoin: round;
+  transition: fill-opacity 160ms ease, stroke 160ms ease, opacity 160ms ease;
+}
+.mp-region:hover { fill-opacity: 0.28; }
+.mp-region.is-active { fill-opacity: 0.4; stroke-width: 1.6; }
+.mp-region.is-dimmed { opacity: 0.3; }
+.mp-region:focus-visible { outline: 2px solid var(--series-blue); outline-offset: 1px; }
+.mp-neutral { fill: var(--gridline); stroke: var(--baseline); stroke-width: 1; vector-effect: non-scaling-stroke; stroke-linejoin: round; pointer-events: none; }
+.mp-status { font-size: 13px; color: var(--text-secondary); display: flex; align-items: center; gap: 6px; }
+.mp-dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+
 .catalog-add {
   display: flex;
   gap: 6px;
