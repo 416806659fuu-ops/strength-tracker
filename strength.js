@@ -1113,6 +1113,16 @@ function initCatalog() {
       moveExercise(moveBtn.dataset.ex, moveBtn.dataset.act === 'up' ? -1 : 1);
       return;
     }
+    // 每套计划清单下面那个「+」：直接把下面常驻的新增框预设成这个计划，
+    // 光标也点过去，不用自己再从下拉菜单里选一遍
+    const addBtn = e.target.closest('.catalog-split-add');
+    if (addBtn) {
+      document.getElementById('catalog-new-split').value = addBtn.dataset.split;
+      const nameInput = document.getElementById('catalog-new-name');
+      nameInput.focus();
+      nameInput.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      return;
+    }
     const row = e.target.closest('.catalog-row');
     if (row) openExerciseDetail(row.dataset.ex);
   });
@@ -1126,21 +1136,18 @@ function renderCatalog() {
   const root = document.getElementById('catalog-list');
   if (!root) return;
 
-  const list = [...state.strength.catalog].sort(
-    (a, b) => a.split.localeCompare(b.split) || (a.order || 0) - (b.order || 0)
-  );
-
-  if (!list.length) {
+  if (!state.strength.catalog.length) {
     root.innerHTML = '<p class="settings-note">还没有动作。点下面的「载入预设动作库」，或者自己一个个加。</p>';
   } else {
-    let html = '';
-    let lastSplit = null;
-    list.forEach((ex) => {
-      if (ex.split !== lastSplit) {
-        html += `<div class="catalog-split-head">${splitLabel(ex.split)}</div>`;
-        lastSplit = ex.split;
-      }
-      html += `
+    // A、B 两组固定都渲染，不是「有动作才出现」——不然某个计划一个动作都
+    // 没有时，连标题和「+」都不会出现，没法给它加第一个动作。
+    const html = ['A', 'B']
+      .map((split) => {
+        const rows = state.strength.catalog
+          .filter((ex) => ex.split === split)
+          .sort((a, b) => (a.order || 0) - (b.order || 0))
+          .map(
+            (ex) => `
         <div class="catalog-row${ex.archived ? ' archived' : ''}" data-ex="${esc(ex.id)}">
           <div class="catalog-row-main">
             <span class="catalog-name">${esc(ex.name)}</span>
@@ -1149,8 +1156,15 @@ function renderCatalog() {
           <button data-act="up" data-ex="${esc(ex.id)}" aria-label="上移">↑</button>
           <button data-act="down" data-ex="${esc(ex.id)}" aria-label="下移">↓</button>
           <span class="catalog-chevron">›</span>
-        </div>`;
-    });
+        </div>`
+          )
+          .join('');
+        return `
+        <div class="catalog-split-head">${splitLabel(split)}</div>
+        ${rows}
+        <button class="catalog-split-add" data-split="${split}">+ 添加到${splitLabel(split)}</button>`;
+      })
+      .join('');
     root.innerHTML = html;
   }
 

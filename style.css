@@ -566,8 +566,23 @@ main {
   border-bottom: 1px solid var(--gridline);
   cursor: pointer;
 }
-.catalog-row:last-of-type { border-bottom: none; }
 .catalog-row.archived { opacity: 0.45; }
+/* 每组最后一行不要下边框——原来用 :last-of-type 判断，现在每组后面
+   多了一个 .catalog-split-add 按钮，改用 :has() 认「紧挨着加号按钮的
+   那一行」，两个计划各自的最后一行都能识别到，不只是整页最后一行 */
+.catalog-row:has(+ .catalog-split-add) { border-bottom: none; }
+/* 每套计划清单末尾自己的「+」，不用先滚到最下面从下拉菜单里选完计划再加 */
+.catalog-split-add {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  padding: 8px;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  background: none;
+  color: var(--text-muted);
+  font-size: 13px;
+}
 .catalog-row-main {
   flex: 1;
   min-width: 0;
@@ -939,16 +954,9 @@ main {
   font-variant-numeric: tabular-nums;
   line-height: 1;
 }
-.reps-counter-hint {
-  position: relative;
-  z-index: 1;
-  font-size: 13px;
-  color: var(--text-muted);
-  transition: opacity 0.15s;
-}
-.reps-counter.charging .reps-counter-hint { opacity: 0; }
-
-/* 数字变化配一下跳动的动效——只是换数字不够有"记录的快感" */
+/* 数字变化配一下跳动的动效——只是换数字不够有"记录的快感"。动效时长
+   比 session.js 的 HOLD_REPEAT_MS（240ms）短一截，留出「跳完停一下」
+   的空隙，连续按住时才是一顿一顿地跳，不是糊成一团。 */
 @keyframes reps-bump-up {
   0% { transform: scale(1); }
   40% { transform: scale(1.2); }
@@ -959,8 +967,8 @@ main {
   40% { transform: scale(0.85); }
   100% { transform: scale(1); }
 }
-.reps-counter-value.bump-up { animation: reps-bump-up 0.18s ease-out; }
-.reps-counter-value.bump-down { animation: reps-bump-down 0.18s ease-out; }
+.reps-counter-value.bump-up { animation: reps-bump-up 0.14s ease-out; }
+.reps-counter-value.bump-down { animation: reps-bump-down 0.14s ease-out; }
 
 .rest-buttons {
   position: absolute;
@@ -997,7 +1005,18 @@ main {
   border-radius: 2px;
   background: currentColor;
 }
-.round-btn.primary { background: var(--series-blue); color: #fff; } /* 训练中被内联动作色覆盖 */
+.round-btn.primary {
+  background: var(--series-blue);
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  line-height: 1;
+} /* 训练中被内联动作色覆盖；主标签固定显示「完成」，休息秒数降级成小字副标题 */
+.round-btn.primary .confirm-main { font-size: 13px; font-weight: 700; }
+.round-btn.primary .confirm-sub { font-size: 8px; font-weight: 400; opacity: 0.85; }
 .round-btn.small { width: 31px; height: 31px; font-size: 22px; font-weight: 400; }
 .round-btn[disabled] { opacity: 0.3; }
 
@@ -1330,7 +1349,7 @@ main {
 }
 .chooser-head {
   align-self: end;
-  padding-bottom: 30px;
+  padding-bottom: 14px;
 }
 .c-date {
   display: block;
@@ -1373,22 +1392,25 @@ main {
   border-radius: 50%;
 }
 
-/* ---- 确认页（Figma 21:100，同 4 行网格）---- */
+/* ---- 确认页（Figma 21:100，同 4 行网格）----
+   底部导航现在常驻不再隐藏这一页，可用高度比设计稿量的时候少了一截
+   （少了导航栏那部分），字号和间距都相应收紧，不然「开始」按钮会被
+   导航栏挡住——这几个尺寸之前是按「导航栏隐藏、独占全屏」量的。 */
 .confirm-letter {
   align-self: center;
   text-align: center;
-  font-size: 228px;
+  font-size: 168px;
   font-weight: 700;
   line-height: 1.1;
   margin: 0;
 }
-/* 第 3 行顶部起：清单 → 总时长 → 开始 → 再想想（间距按设计稿 y 值） */
+/* 第 3 行顶部起：清单 → 总时长 → 开始 → 编辑训练组合 */
 .confirm-bottom {
   grid-row: 3 / 5;
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding-top: 24px;
+  padding-top: 12px;
 }
 .confirm-list {
   width: 178px;
@@ -1410,7 +1432,7 @@ main {
 }
 .start-btn {
   display: block;
-  margin: 46px auto 0;
+  margin: 18px auto 0;
   width: 110px;
   height: 45px;
   border: none;
@@ -1423,7 +1445,7 @@ main {
 }
 .rethink-btn {
   display: block;
-  margin: 16px auto 0;
+  margin: 10px auto 0;
   border: none;
   background: none;
   color: var(--text-muted);

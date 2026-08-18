@@ -360,7 +360,7 @@ function renderPlanConfirm(body) {
         <div class="confirm-list">${rows}</div>
         <div class="confirm-total">需要时间：${totalMinutesLabel(list)}</div>
         <button class="start-btn" id="plan-start">开始</button>
-        <button class="rethink-btn" id="plan-rethink">再想想</button>
+        <button class="rethink-btn" id="plan-edit-catalog">编辑训练组合</button>
       </div>
     </div>`;
 }
@@ -528,7 +528,11 @@ function finishCardio(auto) {
 // 蓄力式的按压——按住一小会儿（不用长按）开始跳数字，越按越快地一直跳，
 // 松手停；往下拖一下退一格。
 const HOLD_DELAY_MS = 220; // 按住多久开始跳字——要有一点"蓄力"感，但不能等太久
-const HOLD_REPEAT_MS = 130; // 之后每隔多久 +1
+// 之后每隔多久 +1：原来 130ms 太快，跳字动效（180ms）比这个间隔还长，
+// 上一下动效没播完下一下就来了，感觉是一团糊而不是一下一下的顿挫。
+// 改成 240ms，比动效时长（缩到 130ms，见 CSS）多出一截"停下来"的空隙，
+// 数字才有一格一格跳的触感，配合 wheelTick() 的咔哒声更明显。
+const HOLD_REPEAT_MS = 240;
 const DRAG_DECREMENT_PX = 28; // 下滑超过这个距离才算"退一格"，太短容易誤触
 const MOVE_CANCEL_PX = 10; // 手指挪动超过这个距离，就不算"按住不动"了
 
@@ -772,7 +776,9 @@ function renderSession() {
   const restSec = isUnilateral && unilateralStep === 'L'
     ? (state.settings.rest || DEFAULT_REST).betweenSides ?? DEFAULT_REST.betweenSides
     : restSecondsAfter(list, pos.exIdx, pos.setIdx);
-  const confirmLabel = restSec > 0 ? restSec + 's' : '完成';
+  // 按钮主标签固定显示「完成」，休息时长降级成小字副标题——原来把秒数当主标签
+  // 显示（如「60s」），用户反馈看不懂点下去是干什么的。
+  const confirmSub = restSec > 0 ? `休息${restSec}s` : '';
 
   // 上次记录：只写日期 + 每组次数的圆点，不加「上次」标注（看日期就懂）
   const prev = lastSession(ex.id, strengthDate);
@@ -805,11 +811,13 @@ function renderSession() {
       <div class="session-main">
         <div class="reps-counter" id="reps-wheel">
           <div class="reps-counter-value" id="reps-counter-value"></div>
-          <div class="reps-counter-hint">按住加 · 下滑减一</div>
         </div>
       </div>
       <div class="rest-buttons">
-        <button class="round-btn primary" id="btn-confirm" style="background:${color}">${confirmLabel}</button>
+        <button class="round-btn primary" id="btn-confirm" style="background:${color}">
+          <span class="confirm-main">完成</span>
+          ${confirmSub ? `<span class="confirm-sub">${confirmSub}</span>` : ''}
+        </button>
         <button class="round-btn pause" id="btn-adjust-rest" aria-label="调整休息"><span class="pause-glyph"></span></button>
       </div>
       <!-- 倒计时嵌在这个区块里，顺时针；颜色跟当前动作统一 -->
@@ -933,9 +941,8 @@ function initSession() {
       confirmPlan();
       return;
     }
-    if (e.target.closest('#plan-rethink')) {
-      pendingSplit = null;
-      renderStrength();
+    if (e.target.closest('#plan-edit-catalog')) {
+      openCatalogPage();
       return;
     }
     if (e.target.closest('#btn-cues')) {
