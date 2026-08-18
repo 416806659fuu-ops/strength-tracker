@@ -464,7 +464,14 @@ function clearRestState() {
 function reallyFinishDay() {
   document.getElementById('finish-confirm').style.display = 'none';
   clearRestState();
-  window.showStrengthForm(true);
+  // 回到「今天练什么」选择页，不是档案/表单模式——已经记的组都保留，
+  // 跟设置页「重新选择今日计划」同一套软重置：今天想再练一轮，或者
+  // 单纯反悔了选别的计划，都能从头选。
+  const day = sEnsureDay(strengthDate);
+  day.confirmed = false;
+  pendingSplit = null;
+  markDirty();
+  renderStrength();
   showToast('训练已结束');
 }
 
@@ -750,7 +757,7 @@ function renderSession() {
           <button class="cue-btn session-edit-exercise-btn" data-ex="${esc(ex.id)}" aria-label="编辑这个动作">✎ 编辑</button>
         </div>
         <div class="prev-row"><span class="prev-empty">计划 ${mins} 分钟有氧</span></div>
-        <button class="finish-btn" id="btn-finish-day">提前结束</button>
+        <button class="finish-btn finish-day-btn">提前结束</button>
       </div>`;
     return;
   }
@@ -816,7 +823,7 @@ function renderSession() {
         </div>
         <p class="rest-hint">点圆环可以提前结束休息</p>
         <button id="rest-add-30" aria-label="再加 30 秒">+30<span>秒</span></button>
-        <button class="rest-finish" id="btn-finish-day">提前结束训练</button>
+        <button class="rest-finish finish-day-btn">提前结束训练</button>
       </div>
       <div class="set-dots">${renderDots(item, pos.setIdx, color)}</div>
     </div>
@@ -833,6 +840,7 @@ function renderSession() {
         <div class="weight-value" id="session-weight"></div>
         <button class="round-btn small" id="btn-weight-up">+</button>
       </div>
+      <button class="finish-btn-inline finish-day-btn">提前结束训练</button>
     </div>`;
 
   initRepsCounter();
@@ -954,7 +962,7 @@ function initSession() {
       finishCardio(false);
     } else if (e.target.closest('#session-edit-btn')) {
       window.showStrengthForm(true);
-    } else if (e.target.closest('#btn-finish-day')) {
+    } else if (e.target.closest('.finish-day-btn')) {
       finishDay();
     } else if (e.target.closest('#btn-edit-plan')) {
       window.openCatalogPage();

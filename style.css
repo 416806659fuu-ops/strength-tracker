@@ -338,7 +338,8 @@ main {
 }
 .last-session.muted { color: var(--text-muted); }
 
-.set-list { margin-top: 8px; }
+/* margin-bottom 给最后一行的算式预览徽标留出空间，不然会贴着补记那一行 */
+.set-list { margin-top: 8px; margin-bottom: 6px; }
 
 /* ---- 滑动删除：靠原生横向滚动 + scroll-snap 实现，不用手写 touch 手势——
    跟纵向翻页天然不会打架，松手自动吸附，比手动算 dx/dy 稳得多。
@@ -347,6 +348,9 @@ main {
    内容 scroll-snap-align:start、删除按钮 scroll-snap-align:end。 ---- */
 .swipe-row {
   overflow-x: auto;
+  /* CSS 规定 overflow-x/overflow-y 只要有一个不是 visible，另一个就会被
+     强制变成 auto——写 visible 也没用，索性老实写 hidden。.calc-preview
+     改成叠在输入框内部（见那条规则的注释），不再依赖这里能溢出显示。 */
   overflow-y: hidden;
   scroll-snap-type: x mandatory;
   -webkit-overflow-scrolling: touch;
@@ -382,6 +386,37 @@ main {
   min-width: 44px;
 }
 .set-row .set-unit-hint { flex: none; margin-left: -2px; font-size: 11px; color: var(--text-muted); }
+/* 算式预览是个悬浮小徽标，绝对定位在输入框正下方，不占行内任何空间——
+   一开始让它跟输入框一起挤在 flex 行里，结果框被挤到只剩几像素宽，
+   改成 absolute 就不会动到旁边任何东西的宽度。.calc-field 是唯一
+   需要 position:relative 的锚点。 */
+/* 特意不用 display:flex：套在外层 flex 行里的 flex 容器会让内部 width:100%
+   算不准（跟外层的份额分配互相绕），改用最简单的 block + width:100%，
+   外层份额（flex:1.2 等）分给 .calc-field 自己，内部输入框就稳稳填满它。 */
+.calc-field { position: relative; display: block; }
+.calc-field input { display: block; width: 100%; min-width: 0; }
+/* 贴在输入框右侧内部，不放到框外——.set-row 那边的 .swipe-row 因为要
+   横向滚动必须 overflow-x:auto，而 CSS 规则规定 overflow-x/overflow-y
+   只要有一个不是 visible，另一个就会被强制变成 auto（不会真的停在
+   visible），框外任何绝对定位的东西都会被这层裁掉。放在框内部就不受
+   这个限制——牺牲一点点跟已输入数字重叠的风险，换来稳定不被裁切。 */
+.calc-preview {
+  display: none;
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 10px;
+  font-weight: 600;
+  color: #fff;
+  background: var(--series-blue);
+  padding: 1px 5px;
+  border-radius: 4px;
+  white-space: nowrap;
+  z-index: 6;
+  pointer-events: none;
+}
+.calc-preview.show { display: inline-block; }
 .set-row .set-x { color: var(--text-muted); font-size: 12px; }
 /* 重量/次数是看得出来的输入框，不是贴着文字下面一道细线——之前那种
    「不聚焦时像纯文字」的设计反而让人不敢点，也不好点中。跟弹窗里
@@ -401,7 +436,7 @@ main {
   padding: 5px 6px;
   text-align: center;
 }
-.set-row .set-edit-weight { flex: none; min-width: 50px; }
+.set-row .calc-field { flex: none; min-width: 50px; }
 .set-row .set-edit-reps { flex: 1; min-width: 0; }
 .set-row .set-edit-weight:focus,
 .set-row .set-edit-reps:focus,
@@ -424,10 +459,42 @@ main {
   color: var(--text-muted);
 }
 
-.add-row .set-weight { flex: 1.2; min-width: 0; width: 0; }
+/* 这条基础规则原来在拆分 style.css 时漏掉了（跟摄入模块共用的 .add-row，
+   当时归到「摄入专属」一起删掉，但重训这边其实也在用）：没有它，底下这些
+   flex:1.2/flex:1 全是空炮——父级不是 flex 容器，flex 属性根本不生效，
+   靠的是输入框默认宽度凑巧还看得过去，一旦内容稍微变化（比如加个算式
+   预览）布局就直接散架。 */
+.add-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+/* 补记这一行的重量/次数框也要看得出来是能打字的框，跟已记录的组
+   同一套边框/底色语言，不能靠浏览器默认样式（在有的手机上几乎看不出
+   边框，会被当成纯文字看不出能点） */
+.add-row .set-weight,
+.add-row .set-reps,
+.add-row .set-reps-side-group input {
+  border: 1px solid var(--border);
+  background: var(--page);
+  border-radius: 8px;
+  padding: 8px 6px;
+  font-size: 15px;
+  color: var(--text-primary);
+  text-align: center;
+}
+.add-row .set-weight:focus,
+.add-row .set-reps:focus,
+.add-row .set-reps-side-group input:focus {
+  outline: none;
+  border-color: var(--series-blue);
+}
+.add-row .calc-field { flex: 1.2; min-width: 0; }
+.add-row .calc-field .set-weight { min-width: 0; width: 100%; }
 .add-row .set-reps { flex: 1; min-width: 0; width: 0; }
 .add-row .set-reps-side-group { flex: 1.4; min-width: 0; }
-.add-row .set-reps-side-group input { flex: 1; min-width: 0; width: 0; text-align: center; }
+.add-row .set-reps-side-group input { flex: 1; min-width: 0; width: 0; }
 .add-row .set-bodyweight {
   flex: 1.2;
   display: flex;
@@ -1020,6 +1087,18 @@ main {
   color: var(--text-primary);
   font-size: 24px;
   font-weight: 400;
+}
+/* 力量动作的「提前结束」不用整块按钮那么显眼——常驻挂在信息区最下面，
+   小字加下划线，看得到但不会跟「确认这一组」抢注意力，也不会误触 */
+.finish-btn-inline {
+  align-self: center;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  font-size: 12px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  padding: 2px 4px;
 }
 /* 项目编辑：更低调，它不是训练中会用的东西 */
 .edit-plan-btn {

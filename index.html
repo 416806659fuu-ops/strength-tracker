@@ -11,7 +11,7 @@
 <meta name="apple-mobile-web-app-title" content="重训记录">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
 <link rel="manifest" href="manifest.json">
-<link rel="stylesheet" href="style.css?v=4">
+<link rel="stylesheet" href="style.css?v=5">
 </head>
 <body>
 
@@ -76,6 +76,12 @@
       </label>
       <button class="settings-btn danger" id="clear-btn">清空全部数据</button>
       <p class="settings-note">记录会先存在这台设备的浏览器本地，离线也能照常记录，长期不上传也不会丢（但清除浏览器数据会把本机记录一起清掉，长期离线期间千万别清）。点顶部的「上传」会把本机数据推送到 Google Sheet 云端，作为备份、也让其他设备能看到最新记录——攒多少天再传都可以。</p>
+    </div>
+
+    <div class="settings-section">
+      <h2>训练项目</h2>
+      <button class="settings-btn" id="open-catalog-btn">编辑训练项目（动作库）</button>
+      <p class="settings-note">A/B 两套计划里各练什么、每个动作的重量/加减幅度/热身与正式组数，都在这里设置。</p>
     </div>
 
     <div class="settings-section">
@@ -153,9 +159,9 @@
   <button data-tab="settings"><span class="tab-icon">⚙️</span>设置</button>
 </nav>
 
-<script src="app.js?v=4"></script>
-<script src="strength.js?v=4"></script>
-<script src="session.js?v=4"></script>
-<script src="settings.js?v=4"></script>
+<script src="app.js?v=5"></script>
+<script src="strength.js?v=5"></script>
+<script src="session.js?v=5"></script>
+<script src="settings.js?v=5"></script>
 </body>
 </html>

@@ -340,6 +340,25 @@ function initStrength() {
     refreshExerciseCard(exId);
   });
 
+  // 重量框支持算式（比如递增填 40+2.5），边打字边告诉你算出来是多少，
+  // 不用等失焦才知道存进去的是哪个数——跟摄入 app 的算式预览同一个思路。
+  // 只有算出来的结果和原始输入不一样时才显示，免得打「8」还要多显示一遍「= 8」。
+  container.addEventListener('input', (e) => {
+    const t = e.target;
+    if (!t.classList.contains('calc-input')) return;
+    const preview = t.nextElementSibling;
+    if (!preview || !preview.classList.contains('calc-preview')) return;
+    const raw = t.value.trim();
+    const val = evalCalExpr(raw);
+    if (val === null || raw === '' || String(val) === raw) {
+      preview.textContent = '';
+      preview.classList.remove('show');
+    } else {
+      preview.textContent = `= ${fmt(val)}`;
+      preview.classList.add('show');
+    }
+  });
+
   // 各自独立初始化：一个模块的 DOM 缺失不该拖垮另一个
   initCatalog();
   initSession();
@@ -473,8 +492,8 @@ function renderSetRow(ex, s, i) {
   const weightInput =
     ex.weightMode === 'bodyweight'
       ? '<span class="set-bodyweight-label">自重</span>'
-      : `<input class="set-edit-weight" type="text" inputmode="decimal" autocomplete="off" spellcheck="false"
-           value="${esc(fmt(s.weight))}" data-ex="${esc(ex.id)}" data-idx="${i}"><span class="set-unit-hint">${unitHint}</span>`;
+      : `<span class="calc-field"><input class="set-edit-weight calc-input" type="text" inputmode="decimal" autocomplete="off" spellcheck="false"
+           value="${esc(fmt(s.weight))}" data-ex="${esc(ex.id)}" data-idx="${i}"><span class="calc-preview"></span></span><span class="set-unit-hint">${unitHint}</span>`;
   // 左右分计用两个各自独立的输入框（左/右），不是一个框里塞「8/6」这种格式——
   // 没有 repsBySide 的老数据/手填数据对半分一下，好歹能进去改，不会一片空白
   const repsInput = ex.weightMode === 'unilateral'
@@ -547,8 +566,8 @@ function renderExerciseCard(rawEx, day) {
   const weightInput =
     ex.weightMode === 'bodyweight'
       ? '<span class="set-bodyweight">自重</span>'
-      : `<input class="set-weight" type="text" inputmode="text" autocomplete="off" spellcheck="false"
-           value="${esc(defW)}" placeholder="${ex.weightMode === 'level' ? '档位' : '重量kg'}">`;
+      : `<span class="calc-field"><input class="set-weight calc-input" type="text" inputmode="text" autocomplete="off" spellcheck="false"
+           value="${esc(defW)}" placeholder="${ex.weightMode === 'level' ? '档位' : '重量kg'}"><span class="calc-preview"></span></span>`;
 
   return `
     <div class="exercise-card" data-ex="${esc(ex.id)}">
