@@ -1025,6 +1025,10 @@ function initExerciseDetail() {
       return;
     }
     if (e.target.id === 'd-archive') {
+      // 归档会让这个动作立刻从今天的训练列表里消失，容易跟"保存/确认"误按
+      // （尤其是刚加完新动作、详情页第一个显眼按钮就是它）——归档前问一句；
+      // 取消归档是无害的恢复动作，不用确认。
+      if (!ex.archived && !confirm(`归档「${ex.name}」？归档后它不会再出现在训练页，但历史记录还留着，随时可以取消归档。`)) return;
       ex.archived = !ex.archived;
       markDirty();
       renderExerciseDetail();
