@@ -128,11 +128,13 @@
 
   .figures { display: flex; gap: 20px; justify-content: center; }
   figure { margin: 0; text-align: center; flex: 1; min-width: 0; max-width: 200px; }
-  /* 正面/背面两张图原始 viewBox 比例不完全一样（尤其女版，正面 734:1538
-     背面 774:1448），各自按 height:auto 独立撑高的话脚的位置会一个高一个
-     低。改成统一比例的固定框 + preserveAspectRatio 贴底对齐（见下面 JS
-     里的 xMidYMax），脚永远卡在框底部，不管哪套数据原始比例多少。 */
-  figure svg { width: 100%; aspect-ratio: 1 / 2.1; display: block; touch-action: manipulation; }
+  /* 正背面两张图不只是脚，肩线/胯线整个躯干比例都可能对不齐——男版数据
+     正背面共用同一张画布坐标系，天然对得上；女版是两套独立坐标系，只贴
+     脚底、贴内容包围盒都只能保证"脚"这一个点对齐，肩/胯这些中间地标该
+     偏还是偏。改成四张图统一用固定像素高度渲染（下面 JS 里用脖子到脚底
+     的实际距离重新校准 viewBox，不是简单靠 CSS 撑），宽度交给浏览器按
+     内容自身比例算，肩/胯/脚才能真正贴在同一条线上。 */
+  figure svg { height: 380px; width: auto; max-width: 100%; display: block; margin: 0 auto; touch-action: manipulation; }
   figcaption { margin-top: 6px; font-size: 12px; color: var(--text-faint); font-weight: 600; letter-spacing: 0.02em; }
 
   .mgroup {
@@ -619,24 +621,61 @@ var MUSCLES_MALE = [
     return el;
   }
 
-  // 原始数据里 hair 是真实发型（长发/短发都有明显发丝造型），直接去掉
-  // 会露出没画完的半个头骨；这里统一不画 head/hair，改成自己钉一个干净的
-  // 光头椭圆——宽度按脖子宽度换算，四套数据（男女×正背）都用同一逻辑，
-  // 不管原始数据里有没有单独的 head 形状（背面女版就没有）都一样能补上。
-  function baldOvalFromNeck(n) {
-    var headW = n.width * 1.85, headH = headW * 1.12;
-    var cx = n.x + n.width / 2;
-    var baseY = n.y + n.height * 0.2; // 椭圆底边往脖子里探一点，接口不留缝
-    var cy = baseY - headH / 2;
-    return { cx: cx, cy: cy, rx: headW / 2, ry: headH / 2 };
+  // 量单个 slug 的真实包围盒（可能对应好几段 path，比如两只脚），用一个
+  // 常驻但不显示的 <svg> 当量尺，不用碰当前正在画的那张图
+  var MEASURE_SVG = svgEl('svg', { style: 'position:absolute;width:0;height:0;overflow:hidden' });
+  document.body.appendChild(MEASURE_SVG);
+  function unionBBoxOfSlug(dataset, view, slug) {
+    var entries = dataset.filter(function (m) { return m[1] === view && m[0] === slug; });
+    var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    entries.forEach(function (m) {
+      var tmp = svgEl('path', { d: m[3] });
+      MEASURE_SVG.appendChild(tmp);
+      var b = tmp.getBBox();
+      minX = Math.min(minX, b.x); minY = Math.min(minY, b.y);
+      maxX = Math.max(maxX, b.x + b.width); maxY = Math.max(maxY, b.y + b.height);
+      MEASURE_SVG.removeChild(tmp);
+    });
+    if (minX === Infinity) return null;
+    return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+  }
+
+  // 骷髅形状（不是圆）：顶部圆润，下半往下巴收窄，用几段贝塞尔手工画一个
+  // 对称的"盾牌"轮廓。headW/headH 决定整体尺寸，baseY 是下巴最底端的位置。
+  function skullPath(cx, headW, headH, baseY) {
+    var rx = headW / 2;
+    var topY = baseY - headH;
+    var templeY = topY + headH * 0.32;
+    var jawY = baseY - headH * 0.06;
+    var jawHalfW = rx * 0.52;
+    function n(v) { return v.toFixed(2); }
+    return 'M ' + n(cx) + ',' + n(topY) +
+      ' C ' + n(cx + rx * 0.55) + ',' + n(topY) + ' ' + n(cx + rx) + ',' + n(topY + headH * 0.12) + ' ' + n(cx + rx) + ',' + n(templeY) +
+      ' C ' + n(cx + rx) + ',' + n(templeY + headH * 0.22) + ' ' + n(cx + jawHalfW * 1.25) + ',' + n(jawY - headH * 0.08) + ' ' + n(cx + jawHalfW) + ',' + n(jawY) +
+      ' C ' + n(cx + jawHalfW * 0.6) + ',' + n(baseY) + ' ' + n(cx - jawHalfW * 0.6) + ',' + n(baseY) + ' ' + n(cx - jawHalfW) + ',' + n(jawY) +
+      ' C ' + n(cx - jawHalfW * 1.25) + ',' + n(jawY - headH * 0.08) + ' ' + n(cx - rx) + ',' + n(templeY + headH * 0.22) + ' ' + n(cx - rx) + ',' + n(templeY) +
+      ' C ' + n(cx - rx) + ',' + n(topY + headH * 0.12) + ' ' + n(cx - rx * 0.55) + ',' + n(topY) + ' ' + n(cx) + ',' + n(topY) + ' Z';
   }
 
   function buildFigure(svgId, view) {
     var svg = document.getElementById(svgId);
-    svg.setAttribute('viewBox', VIEWBOXES[gender][view]);
+    var dataset = DATASETS[gender];
+
+    // 用脖子顶端到脚底的实际距离校准 viewBox 高度——正背面各自的 span
+    // 按同一个比例留白，缩放到同一个像素高度里，脖子/脚底自然落在同一
+    // 条线上；肩、胯这些介于两者之间的地标只要正背面原始躯干比例本身
+    // 差不多，也会一并跟着对上，不用逐个部位单独校准。
+    var neckM = unionBBoxOfSlug(dataset, view, 'neck');
+    var feetM = unionBBoxOfSlug(dataset, view, 'feet');
+    var neckTopY = neckM.y;
+    var feetBottomY = feetM.y + feetM.height;
+    var span = feetBottomY - neckTopY;
+    var padTopRatio = 0.26, padBottomRatio = 0.008;
+    var viewBoxTop = neckTopY - span * padTopRatio;
+    var viewBoxHeight = span * (1 + padTopRatio + padBottomRatio);
+
     svg.innerHTML = '';
-    var neckBBox = null;
-    DATASETS[gender].filter(function (m) { return m[1] === view && m[0] !== 'hair' && m[0] !== 'head'; }).forEach(function (m) {
+    dataset.filter(function (m) { return m[1] === view && m[0] !== 'hair' && m[0] !== 'head'; }).forEach(function (m) {
       var id = m[0], group = m[2], d = m[3];
       if (group) {
         svg.appendChild(svgEl('path', {
@@ -645,30 +684,25 @@ var MUSCLES_MALE = [
           d: d
         }));
       } else {
-        var el = svgEl('path', { class: 'neutral-part', d: d, 'data-muscle': id });
-        svg.appendChild(el);
-        if (id === 'neck') {
-          var nb = el.getBBox();
-          neckBBox = neckBBox ? {
-            x: Math.min(neckBBox.x, nb.x), y: Math.min(neckBBox.y, nb.y),
-            width: Math.max(neckBBox.x + neckBBox.width, nb.x + nb.width) - Math.min(neckBBox.x, nb.x),
-            height: Math.max(neckBBox.y + neckBBox.height, nb.y + nb.height) - Math.min(neckBBox.y, nb.y)
-          } : nb;
-        }
+        svg.appendChild(svgEl('path', { class: 'neutral-part', d: d, 'data-muscle': id }));
       }
     });
-    if (neckBBox) {
-      var o = baldOvalFromNeck(neckBBox);
-      svg.insertBefore(svgEl('ellipse', { class: 'neutral-part', cx: o.cx, cy: o.cy, rx: o.rx, ry: o.ry }), svg.firstChild);
-    }
-    // 贴底对齐：正面/背面两套原始数据画布留白不一样多（尤其女版），脚虽然
-    // 都画在各自留白区域上沿，但留白厚度不同，直接用原始 viewBox 对不齐。
-    // 改成量出实际内容的包围盒重设 viewBox（下边不留白，贴底），四张图的
-    // 脚就都卡在同一条线上，不用管原始画布留了多少白边。
-    var b = svg.getBBox();
-    var padX = b.width * 0.025, padTop = b.height * 0.015;
-    svg.setAttribute('viewBox', (b.x - padX) + ' ' + (b.y - padTop) + ' ' + (b.width + 2 * padX) + ' ' + (b.height + padTop));
-    svg.setAttribute('preserveAspectRatio', 'xMidYMax meet');
+
+    // 横向范围直接量已经画好的躯干（头还没画），两侧留一点边
+    var bodyBBox = svg.getBBox();
+    var padX = bodyBBox.width * 0.05;
+
+    // 头的尺寸按 span（等于身高的校准基准）算，不是按脖子宽度算——脖子
+    // 宽度四套数据原始画法有大有小，按它算头会一个大一个小；按 span 算，
+    // 正背面渲染到同一个像素高度后，头自然就是同一个像素大小。
+    var headW = span * 0.155;
+    var headH = headW * 1.25;
+    var cx = neckM.x + neckM.width / 2;
+    var baseY = neckTopY + neckM.height * 0.3;
+    svg.insertBefore(svgEl('path', { class: 'neutral-part', d: skullPath(cx, headW, headH, baseY) }), svg.firstChild);
+
+    svg.setAttribute('viewBox', (bodyBBox.x - padX) + ' ' + viewBoxTop + ' ' + (bodyBBox.width + 2 * padX) + ' ' + viewBoxHeight);
+    svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
   }
   function rebuildFigures() {
     buildFigure('svg-front', 'front');
