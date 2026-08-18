@@ -695,7 +695,10 @@ var MUSCLES_MALE = [
     // 头的尺寸按 span（等于身高的校准基准）算，不是按脖子宽度算——脖子
     // 宽度四套数据原始画法有大有小，按它算头会一个大一个小；按 span 算，
     // 正背面渲染到同一个像素高度后，头自然就是同一个像素大小。
-    var headW = span * 0.155;
+    // 按人体比例来：成年人身高大约是 7~7.5 个头长，span 约等于「脖子到
+    // 脚底」这段身高，头长（headH）该是 span 的 1/6.5 左右——原来 0.194
+    // 明显偏大，缩到接近真实比例。
+    var headW = span * 0.115;
     var headH = headW * 1.25;
     var cx = neckM.x + neckM.width / 2;
     var baseY = neckTopY + neckM.height * 0.3;
