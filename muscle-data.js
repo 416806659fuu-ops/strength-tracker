@@ -17,6 +17,41 @@ const MUSCLE_GROUPS = {
 };
 const DEFAULT_EXERCISE_COLOR = '#9aa0aa'; // 还没选部位的动作，中性灰兜底
 
+// 建计划页用的预设动作库：点身体部位过滤出来的候选卡片就是这份数据。
+// 拖进空位时会原样复制一份（附上 libId 方便查"这个计划里是不是已经加过
+// 这条了"）进用户自己的目录，之后重量/组数照常在动作详情页里改。
+const EXERCISE_LIBRARY = [
+  { libId: 'deadlift', name: '传统硬拉', muscleGroup: 'legs', kind: 'strength', weightMode: 'single', weight: 40, step: 2.5, warmupSets: 1, workSets: 4 },
+  { libId: 'bulgarian-split-squat', name: '保加利亚单腿蹲', muscleGroup: 'legs', kind: 'strength', weightMode: 'unilateral', weight: 4, step: 1, warmupSets: 0, workSets: 4 },
+  { libId: 'leg-press', name: '腿举', muscleGroup: 'legs', kind: 'strength', weightMode: 'single', weight: 40, step: 5, warmupSets: 1, workSets: 4 },
+  { libId: 'calf-raise', name: '提踵', muscleGroup: 'legs', kind: 'strength', weightMode: 'bodyweight', warmupSets: 0, workSets: 4 },
+  { libId: 'incline-walk', name: '爬坡走', muscleGroup: 'legs', kind: 'cardio', durationMin: 20 },
+
+  { libId: 'glute-bridge', name: '臀桥', muscleGroup: 'glutes', kind: 'strength', weightMode: 'bodyweight', warmupSets: 0, workSets: 4 },
+  { libId: 'hip-thrust', name: '臀推', muscleGroup: 'glutes', kind: 'strength', weightMode: 'single', weight: 20, step: 2.5, warmupSets: 1, workSets: 4 },
+  { libId: 'cable-kickback', name: '绳索后踢', muscleGroup: 'glutes', kind: 'strength', weightMode: 'unilateral', weight: 5, step: 2.5, warmupSets: 0, workSets: 3 },
+
+  { libId: 'bench-press', name: '卧推', muscleGroup: 'chest', kind: 'strength', weightMode: 'single', weight: 20, step: 2.5, warmupSets: 1, workSets: 4 },
+  { libId: 'incline-press', name: '上斜卧推', muscleGroup: 'chest', kind: 'strength', weightMode: 'single', weight: 17.5, step: 2.5, warmupSets: 1, workSets: 4 },
+  { libId: 'dips', name: '双杠臂屈伸', muscleGroup: 'chest', kind: 'strength', weightMode: 'bodyweight', warmupSets: 0, workSets: 3 },
+  { libId: 'chest-fly', name: '夹胸', muscleGroup: 'chest', kind: 'strength', weightMode: 'pair', weight: 8, step: 1, warmupSets: 0, workSets: 3 },
+
+  { libId: 'lat-pulldown', name: '高位下拉', muscleGroup: 'back', kind: 'strength', weightMode: 'single', weight: 25, step: 2.5, warmupSets: 0, workSets: 4 },
+  { libId: 'seated-row', name: '宽距划船', muscleGroup: 'back', kind: 'strength', weightMode: 'single', weight: 22.5, step: 2.5, warmupSets: 0, workSets: 4 },
+  { libId: 'pull-up', name: '引体向上', muscleGroup: 'back', kind: 'strength', weightMode: 'bodyweight', warmupSets: 0, workSets: 3 },
+  { libId: 'single-arm-row', name: '单臂哑铃划船', muscleGroup: 'back', kind: 'strength', weightMode: 'unilateral', weight: 10, step: 1, warmupSets: 0, workSets: 4 },
+
+  { libId: 'lateral-raise', name: '侧平举', muscleGroup: 'shoulders', kind: 'strength', weightMode: 'pair', weight: 4, step: 1, warmupSets: 0, workSets: 4 },
+  { libId: 'face-pull', name: '肩背中束面拉', muscleGroup: 'shoulders', kind: 'strength', weightMode: 'level', weight: 18.1, levels: [14.7, 16.97, 18.1], warmupSets: 0, workSets: 4 },
+  { libId: 'shoulder-press', name: '站姿推举', muscleGroup: 'shoulders', kind: 'strength', weightMode: 'single', weight: 15, step: 2.5, warmupSets: 1, workSets: 4 },
+  { libId: 'bicep-curl', name: '杠铃弯举', muscleGroup: 'shoulders', kind: 'strength', weightMode: 'single', weight: 15, step: 2.5, warmupSets: 0, workSets: 4 },
+  { libId: 'tricep-pushdown', name: '绳索下压', muscleGroup: 'shoulders', kind: 'strength', weightMode: 'single', weight: 15, step: 2.5, warmupSets: 0, workSets: 4 },
+
+  { libId: 'crunch', name: '卷腹', muscleGroup: 'abs', kind: 'strength', weightMode: 'bodyweight', warmupSets: 0, workSets: 3 },
+  { libId: 'leg-raise', name: '悬垂举腿', muscleGroup: 'abs', kind: 'strength', weightMode: 'bodyweight', warmupSets: 0, workSets: 3 },
+  { libId: 'plank', name: '平板支撑', muscleGroup: 'abs', kind: 'cardio', durationMin: 3 },
+];
+
 function exerciseColor(ex) {
   const g = ex && ex.muscleGroup && MUSCLE_GROUPS[ex.muscleGroup];
   return g ? g.color : DEFAULT_EXERCISE_COLOR;
@@ -267,30 +302,40 @@ function mpBuildFigure(svgId, view) {
   svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
 }
 
-function mpPaint() {
-  const ex = exerciseById(detailExId);
-  const active = ex && ex.muscleGroup;
-  document.querySelectorAll('.mp-region').forEach((el) => {
-    const key = el.getAttribute('data-group');
-    el.style.setProperty('--c', MUSCLE_GROUPS[key].color);
-    el.style.fill = 'var(--c)';
-    el.classList.toggle('is-active', active === key);
-    el.classList.toggle('is-dimmed', !!active && active !== key);
-    el.style.stroke = active === key ? MUSCLE_GROUPS[key].color : '';
-  });
-  const status = document.getElementById('mp-status');
-  if (status) {
-    if (active && MUSCLE_GROUPS[active]) {
-      status.innerHTML = `<span class="mp-dot" style="background:${MUSCLE_GROUPS[active].color}"></span>已选：${MUSCLE_GROUPS[active].label}`;
-    } else {
-      status.textContent = '点身体部位选一个';
+// 通用的身体图选择器——单个动作的详情页（选一个部位）和建计划页（选部位
+// 过滤候选动作）都用这个，靠 frontId/backId 认哪张图，不写死某个具体页面。
+// opts: { frontId, backId, statusId?, getActive: () => 分组key或null }
+function createBodyPicker(opts) {
+  function paint() {
+    const active = opts.getActive();
+    [opts.frontId, opts.backId].forEach((svgId) => {
+      const svg = document.getElementById(svgId);
+      if (!svg) return;
+      svg.querySelectorAll('.mp-region').forEach((el) => {
+        const key = el.getAttribute('data-group');
+        el.style.setProperty('--c', MUSCLE_GROUPS[key].color);
+        el.style.fill = 'var(--c)';
+        el.classList.toggle('is-active', active === key);
+        el.classList.toggle('is-dimmed', !!active && active !== key);
+        el.style.stroke = active === key ? MUSCLE_GROUPS[key].color : '';
+      });
+    });
+    if (opts.statusId) {
+      const status = document.getElementById(opts.statusId);
+      if (status) {
+        if (active && MUSCLE_GROUPS[active]) {
+          status.innerHTML = `<span class="mp-dot" style="background:${MUSCLE_GROUPS[active].color}"></span>已选：${MUSCLE_GROUPS[active].label}`;
+        } else {
+          status.textContent = '点身体部位选一个';
+        }
+      }
     }
   }
-}
-
-function initMusclePicker() {
-  if (!document.getElementById('muscle-picker')) return;
-  mpBuildFigure('mp-front', 'front');
-  mpBuildFigure('mp-back', 'back');
-  mpPaint();
+  function build() {
+    if (!document.getElementById(opts.frontId)) return;
+    mpBuildFigure(opts.frontId, 'front');
+    mpBuildFigure(opts.backId, 'back');
+    paint();
+  }
+  return { build, paint };
 }

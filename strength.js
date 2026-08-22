@@ -361,7 +361,7 @@ function initStrength() {
   });
 
   // 各自独立初始化：一个模块的 DOM 缺失不该拖垮另一个
-  initCatalog();
+  initBuilder();
   initSession();
 }
 
@@ -704,21 +704,6 @@ const WEIGHT_MODES = [
   { key: 'bodyweight', label: '自重', hint: '不加负重' },
 ];
 
-// 你现在真正在练的：A 计划练腿 4 项，B 计划胸背 3 项 + 爬坡走有氧。顺序固定。
-// muscleGroup 对应「练哪个部位」选择器里的 6 个分组，训练卡片的颜色从这
-// 里查（见 muscle-data.js 的 exerciseColor()）——传统硬拉是后链复合动作，
-// 归到「腿」（跟当前 A 计划练腿的定位一致），保加利亚单腿蹲同理。
-const SEED_CATALOG = [
-  { name: '传统硬拉', split: 'A', kind: 'strength', weightMode: 'single', weight: 40, step: 2.5, warmupSets: 1, workSets: 4, muscleGroup: 'legs' },
-  { name: '保加利亚单腿蹲', split: 'A', kind: 'strength', weightMode: 'unilateral', weight: 4, step: 1, warmupSets: 0, workSets: 4, muscleGroup: 'legs' },
-  { name: '侧平举', split: 'A', kind: 'strength', weightMode: 'pair', weight: 4, step: 1, warmupSets: 0, workSets: 4, muscleGroup: 'shoulders' },
-  { name: '肩背中束面拉', split: 'A', kind: 'strength', weightMode: 'level', weight: 18.1, levels: [14.7, 16.97, 18.1], warmupSets: 0, workSets: 4, muscleGroup: 'shoulders' },
-  { name: '卧推', split: 'B', kind: 'strength', weightMode: 'single', weight: 20, step: 2.5, warmupSets: 1, workSets: 4, muscleGroup: 'chest' },
-  { name: '高位下拉', split: 'B', kind: 'strength', weightMode: 'single', weight: 25, step: 2.5, warmupSets: 0, workSets: 4, muscleGroup: 'back' },
-  { name: '宽距划船', split: 'B', kind: 'strength', weightMode: 'single', weight: 22.5, step: 2.5, warmupSets: 0, workSets: 4, muscleGroup: 'back' },
-  { name: '爬坡走', split: 'B', kind: 'cardio', durationMin: 20, muscleGroup: 'legs' },
-];
-
 // 这个动作被多少天的记录引用了。有引用就不能删，
 // 否则那些天的记录会因为找不到动作而在界面上凭空消失。
 function usageCount(exId) {
@@ -746,32 +731,21 @@ function exerciseSummary(ex) {
   return parts.join(' · ');
 }
 
-function seedCatalog() {
-  if (state.strength.catalog.length > 0 && !confirm('动作库里已经有动作了，载入预设会把它们追加进来，确定吗？')) return;
-  const base = state.strength.catalog.length;
-  SEED_CATALOG.forEach((tpl, i) => {
-    state.strength.catalog.push(Object.assign({ id: uid(), order: base + i, archived: false }, tpl));
-  });
-  markDirty();
-  renderCatalog();
-  showToast('已载入预设动作库');
+// 这套计划当前的动作，按训练顺序排好——「排第几个」就是槽位序号，
+// 跟每条记录自己存的 order 原始值多大无关（旧数据 order 不连续也没事）。
+function splitExercises(split) {
+  return state.strength.catalog.filter((e) => e.split === split).sort((a, b) => (a.order || 0) - (b.order || 0));
 }
 
-function addExercise() {
-  const input = document.getElementById('catalog-new-name');
-  const name = input.value.trim();
-  if (!name) {
-    input.focus();
-    return;
-  }
-  const split = document.getElementById('catalog-new-split').value;
-  const order = state.strength.catalog.reduce((m, e) => Math.max(m, e.order || 0), -1) + 1;
+// 「自己写一个动作」：候选库里没有想练的项目时的兜底，不用拖，直接加到
+// 这套计划的末尾，然后跟以前一样直接进详情页配置重量/组数。
+function addCustomExercise(name) {
+  const list = splitExercises(builderSplit);
   const ex = {
     id: uid(),
     name,
-    split,
-    order,
-    archived: false,
+    split: builderSplit,
+    order: list.length,
     kind: 'strength',
     weightMode: 'single',
     weight: null,
@@ -779,26 +753,11 @@ function addExercise() {
     warmupSets: 0,
     workSets: 4,
   };
+  if (builderActiveGroup) ex.muscleGroup = builderActiveGroup; // 当时选中了哪个部位就带上，省一步
   state.strength.catalog.push(ex);
-  input.value = '';
   markDirty();
-  renderCatalog();
-  openExerciseDetail(ex.id); // 新动作直接进详情页配置
-}
-
-function moveExercise(exId, delta) {
-  const ex = exerciseById(exId);
-  const list = state.strength.catalog
-    .filter((e) => e.split === ex.split)
-    .sort((a, b) => (a.order || 0) - (b.order || 0));
-  const i = list.findIndex((e) => e.id === exId);
-  const j = i + delta;
-  if (j < 0 || j >= list.length) return;
-  const tmp = list[i].order;
-  list[i].order = list[j].order;
-  list[j].order = tmp;
-  markDirty();
-  renderCatalog();
+  renderBuilder();
+  openExerciseDetail(ex.id);
 }
 
 // ---- 动作详情页（全屏覆盖层）----
@@ -824,7 +783,12 @@ function closeExerciseDetail() {
   detailOnce = false;
   document.getElementById('exercise-detail').style.display = 'none';
   document.body.style.overflow = '';
-  renderCatalog();
+  // 只在建计划页真的开着的时候才重画它——这页里的身体图靠 getBBox() 量
+  // 尺寸，页面 display:none 的时候量出来的东西是坏的（下次真打开会自己
+  // 重新算对，但没必要做这趟无意义的重画）。从训练中点进来编辑动作时，
+  // 建计划页本来就是关着的，不用管它。
+  const catalogPage = document.getElementById('catalog-page');
+  if (catalogPage && catalogPage.style.display !== 'none') renderBuilder();
   // 训练页可能因为这次编辑（组数、重量……）需要立刻重画，不等下次切 tab
   if (window.renderStrength) window.renderStrength();
 }
@@ -975,7 +939,15 @@ function renderExerciseDetail() {
     ${dangerBlock}`;
 
   document.getElementById('detail-title').textContent = rawEx.name;
-  if (window.initMusclePicker) window.initMusclePicker(); // 仅本次模式下 identityBlock 是空的，函数内部会自己判断有没有挂载点
+  // 仅本次模式下 identityBlock 是空的，没有 #mp-front 挂载点，build() 内部会自己跳过
+  if (window.createBodyPicker) {
+    createBodyPicker({
+      frontId: 'mp-front',
+      backId: 'mp-back',
+      statusId: 'mp-status',
+      getActive: () => (exerciseById(detailExId) || {}).muscleGroup || null,
+    }).build();
+  }
 }
 
 function parseLevels(raw) {
@@ -1125,7 +1097,7 @@ function openCatalogPage() {
   if (!page) return;
   page.style.display = 'block';
   document.body.style.overflow = 'hidden';
-  renderCatalog();
+  renderBuilder();
 }
 
 function closeCatalogPage() {
@@ -1137,9 +1109,148 @@ function closeCatalogPage() {
   renderStrength();
 }
 
-function initCatalog() {
-  const root = document.getElementById('catalog-list');
-  if (!root) return; // 页面上没有这一块就跳过
+// ---- 建计划页：点身体图选部位 → 过滤候选动作 → 拖进 A/B 计划的空位 ----
+// 空位序号就是训练顺序；已经排好的卡片点一下进详情页改重量/组数/删除。
+let builderSplit = 'A';
+let builderActiveGroup = null;
+let builderPicker = null;
+
+function renderBuilderCandidates() {
+  const root = document.getElementById('builder-candidates');
+  if (!root) return;
+  if (!builderActiveGroup) {
+    root.innerHTML = '<p class="settings-note">点上面身体部位，看看能加什么。</p>';
+    return;
+  }
+  const already = new Set(state.strength.catalog.filter((e) => e.split === builderSplit && e.libId).map((e) => e.libId));
+  const items = EXERCISE_LIBRARY.filter((l) => l.muscleGroup === builderActiveGroup);
+  const cards = items
+    .map((lib) => {
+      const added = already.has(lib.libId);
+      return `
+      <div class="builder-card${added ? ' is-added' : ''}" data-lib-id="${esc(lib.libId)}"${added ? '' : ' tabindex="0" role="button"'} aria-label="${esc(lib.name)}">
+        <span class="builder-card-name">${esc(lib.name)}</span>
+        <span class="builder-card-sub">${added ? '已加入' : '拖进下面空位'}</span>
+      </div>`;
+    })
+    .join('');
+  root.innerHTML = `
+    <div class="builder-card-grid">${cards}</div>
+    <button class="settings-btn" id="builder-custom-btn">+ 自己写一个动作</button>
+    <div class="builder-custom-add" id="builder-custom-add" style="display:none;">
+      <input type="text" id="builder-custom-name" placeholder="动作名称" autocomplete="off">
+      <button id="builder-custom-confirm">加入${splitLabel(builderSplit)}</button>
+    </div>`;
+}
+
+function renderBuilderSlots() {
+  const label = document.getElementById('builder-slots-label');
+  const root = document.getElementById('builder-slots');
+  if (!root) return;
+  const list = splitExercises(builderSplit);
+  if (label) label.textContent = `${splitLabel(builderSplit)}的顺序（${list.length} 项，拖进空位加入）`;
+  const slotCount = Math.max(4, list.length + 1); // 至少留 4 个位置，且永远多一个空位可以继续加
+  const slots = [];
+  for (let i = 0; i < slotCount; i++) {
+    const ex = list[i];
+    if (ex) {
+      slots.push(`
+        <div class="builder-slot slot-filled" data-order="${i}" data-ex="${esc(ex.id)}" style="--c:${exerciseColor(ex)}">
+          <span class="builder-slot-num">${i + 1}</span>
+          <span class="builder-slot-name">${esc(ex.name)}</span>
+          <span class="builder-slot-sub">${exerciseSummary(ex)}</span>
+        </div>`);
+    } else {
+      slots.push(`
+        <div class="builder-slot slot-empty" data-order="${i}">
+          <span class="builder-slot-num">${i + 1}</span>
+          <span class="builder-slot-placeholder">空位</span>
+        </div>`);
+    }
+  }
+  root.innerHTML = slots.join('');
+}
+
+function renderBuilder() {
+  document.querySelectorAll('.split-toggle-btn').forEach((b) => b.classList.toggle('active', b.dataset.split === builderSplit));
+  if (!builderPicker) {
+    builderPicker = createBodyPicker({ frontId: 'bp-front', backId: 'bp-back', statusId: 'bp-status', getActive: () => builderActiveGroup });
+  }
+  builderPicker.build();
+  renderBuilderCandidates();
+  renderBuilderSlots();
+}
+
+// 拖动作卡片：pointer capture 挂在卡片本身上，手指划出卡片范围也不丢事件；
+// 挪一下 ghost 时先把它自己藏起来再问 elementFromPoint，不然量到的是自己。
+function positionGhost(ghost, x, y) {
+  ghost.style.left = x + 'px';
+  ghost.style.top = y + 'px';
+}
+
+function startBuilderDrag(e, card, payload) {
+  e.preventDefault();
+  const rect = card.getBoundingClientRect();
+  const ghost = card.cloneNode(true);
+  ghost.className = 'builder-drag-ghost';
+  ghost.style.width = rect.width + 'px';
+  document.body.appendChild(ghost);
+  positionGhost(ghost, e.clientX, e.clientY);
+  card.classList.add('dragging-source');
+  card.setPointerCapture(e.pointerId);
+
+  const clearHighlight = () => document.querySelectorAll('.builder-slot.drop-target').forEach((s) => s.classList.remove('drop-target'));
+  const cleanup = () => {
+    card.removeEventListener('pointermove', onMove);
+    card.removeEventListener('pointerup', onUp);
+    card.removeEventListener('pointercancel', onCancel);
+    ghost.remove();
+    card.classList.remove('dragging-source');
+    clearHighlight();
+  };
+  const onMove = (ev) => {
+    positionGhost(ghost, ev.clientX, ev.clientY);
+    clearHighlight();
+    ghost.style.visibility = 'hidden';
+    const el = document.elementFromPoint(ev.clientX, ev.clientY);
+    ghost.style.visibility = '';
+    const slot = el && el.closest('.builder-slot');
+    if (slot) slot.classList.add('drop-target');
+  };
+  const onUp = (ev) => {
+    ghost.style.visibility = 'hidden';
+    const el = document.elementFromPoint(ev.clientX, ev.clientY);
+    cleanup();
+    const slot = el && el.closest('.builder-slot');
+    if (slot) handleBuilderDrop(Number(slot.dataset.order), payload);
+  };
+  const onCancel = cleanup;
+  card.addEventListener('pointermove', onMove);
+  card.addEventListener('pointerup', onUp);
+  card.addEventListener('pointercancel', onCancel);
+}
+
+function handleBuilderDrop(targetIndex, payload) {
+  const lib = EXERCISE_LIBRARY.find((l) => l.libId === payload.libId);
+  if (!lib) return;
+  if (state.strength.catalog.some((e) => e.split === builderSplit && e.libId === lib.libId)) {
+    renderBuilder(); // 已经加过了，不重复加，原样重画一遍
+    return;
+  }
+  const list = splitExercises(builderSplit);
+  const { libId, ...tpl } = lib;
+  const ex = Object.assign({ id: uid(), split: builderSplit, libId }, tpl);
+  list.splice(Math.min(targetIndex, list.length), 0, ex);
+  state.strength.catalog.push(ex);
+  list.forEach((item, i) => {
+    item.order = i;
+  }); // 按拖放后的新顺序重写连续序号，不用管旧数据 order 是不是连续的
+  markDirty();
+  renderBuilder();
+}
+
+function initBuilder() {
+  if (!document.getElementById('builder-slots')) return; // 页面上没有这一块就跳过
 
   const backBtn = document.getElementById('catalog-back');
   if (backBtn) backBtn.addEventListener('click', closeCatalogPage);
@@ -1147,70 +1258,75 @@ function initCatalog() {
   const openBtn = document.getElementById('open-catalog-btn');
   if (openBtn) openBtn.addEventListener('click', openCatalogPage);
 
-  root.addEventListener('click', (e) => {
-    const moveBtn = e.target.closest('button[data-act]');
-    if (moveBtn) {
-      e.stopPropagation();
-      moveExercise(moveBtn.dataset.ex, moveBtn.dataset.act === 'up' ? -1 : 1);
-      return;
-    }
-    // 每套计划清单下面那个「+」：直接把下面常驻的新增框预设成这个计划，
-    // 光标也点过去，不用自己再从下拉菜单里选一遍
-    const addBtn = e.target.closest('.catalog-split-add');
-    if (addBtn) {
-      document.getElementById('catalog-new-split').value = addBtn.dataset.split;
-      const nameInput = document.getElementById('catalog-new-name');
-      nameInput.focus();
-      nameInput.scrollIntoView({ block: 'center', behavior: 'smooth' });
-      return;
-    }
-    const row = e.target.closest('.catalog-row');
-    if (row) openExerciseDetail(row.dataset.ex);
-  });
-
-  document.getElementById('catalog-add-btn').addEventListener('click', addExercise);
-  document.getElementById('seed-catalog-btn').addEventListener('click', seedCatalog);
-  initExerciseDetail();
-}
-
-function renderCatalog() {
-  const root = document.getElementById('catalog-list');
-  if (!root) return;
-
-  if (!state.strength.catalog.length) {
-    root.innerHTML = '<p class="settings-note">还没有动作。点下面的「载入预设动作库」，或者自己一个个加。</p>';
-  } else {
-    // A、B 两组固定都渲染，不是「有动作才出现」——不然某个计划一个动作都
-    // 没有时，连标题和「+」都不会出现，没法给它加第一个动作。
-    const html = ['A', 'B']
-      .map((split) => {
-        const rows = state.strength.catalog
-          .filter((ex) => ex.split === split)
-          .sort((a, b) => (a.order || 0) - (b.order || 0))
-          .map(
-            (ex) => `
-        <div class="catalog-row" data-ex="${esc(ex.id)}">
-          <div class="catalog-row-main">
-            <span class="catalog-name">${esc(ex.name)}</span>
-            <span class="catalog-sub">${exerciseSummary(ex)}</span>
-          </div>
-          <button data-act="up" data-ex="${esc(ex.id)}" aria-label="上移">↑</button>
-          <button data-act="down" data-ex="${esc(ex.id)}" aria-label="下移">↓</button>
-          <span class="catalog-chevron">›</span>
-        </div>`
-          )
-          .join('');
-        return `
-        <div class="catalog-split-head">${splitLabel(split)}</div>
-        ${rows}
-        <button class="catalog-split-add" data-split="${split}">+ 添加到${splitLabel(split)}</button>`;
-      })
-      .join('');
-    root.innerHTML = html;
+  const toggle = document.getElementById('builder-split-toggle');
+  if (toggle) {
+    toggle.addEventListener('click', (e) => {
+      const btn = e.target.closest('.split-toggle-btn');
+      if (!btn) return;
+      builderSplit = btn.dataset.split;
+      builderActiveGroup = null;
+      renderBuilder();
+    });
   }
 
-  const seedBtn = document.getElementById('seed-catalog-btn');
-  if (seedBtn) seedBtn.style.display = state.strength.catalog.length ? 'none' : 'block';
+  const pickerEl = document.getElementById('builder-picker');
+  if (pickerEl) {
+    const selectGroup = (region) => {
+      builderActiveGroup = region.getAttribute('data-group');
+      renderBuilder();
+    };
+    pickerEl.addEventListener('click', (e) => {
+      const region = e.target.closest('.mp-region');
+      if (region) selectGroup(region);
+    });
+    pickerEl.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      const region = e.target.closest('.mp-region');
+      if (!region) return;
+      e.preventDefault();
+      selectGroup(region);
+    });
+  }
+
+  const candidatesEl = document.getElementById('builder-candidates');
+  if (candidatesEl) {
+    candidatesEl.addEventListener('click', (e) => {
+      if (e.target.id === 'builder-custom-btn') {
+        document.getElementById('builder-custom-add').style.display = 'flex';
+        e.target.style.display = 'none';
+        document.getElementById('builder-custom-name').focus();
+        return;
+      }
+      if (e.target.id === 'builder-custom-confirm') {
+        const input = document.getElementById('builder-custom-name');
+        const name = input.value.trim();
+        if (!name) {
+          input.focus();
+          return;
+        }
+        addCustomExercise(name);
+      }
+    });
+    candidatesEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && e.target.id === 'builder-custom-name') {
+        const name = e.target.value.trim();
+        if (name) addCustomExercise(name);
+      }
+    });
+    candidatesEl.addEventListener('pointerdown', (e) => {
+      const card = e.target.closest('.builder-card:not(.is-added)');
+      if (!card) return;
+      startBuilderDrag(e, card, { libId: card.dataset.libId });
+    });
+  }
+
+  const slotsEl = document.getElementById('builder-slots');
+  slotsEl.addEventListener('click', (e) => {
+    const slot = e.target.closest('.builder-slot.slot-filled');
+    if (slot) openExerciseDetail(slot.dataset.ex);
+  });
+
+  initExerciseDetail();
 }
 
 
@@ -1310,7 +1426,7 @@ function renderStrengthHistory() {
 window.initStrength = initStrength;
 window.renderStrength = renderStrength;
 window.showStrengthForm = showStrengthForm;
-window.initCatalog = initCatalog;
-window.renderCatalog = renderCatalog;
+window.initBuilder = initBuilder;
+window.renderBuilder = renderBuilder;
 window.renderStrengthHistory = renderStrengthHistory;
 window.openCatalogPage = openCatalogPage;

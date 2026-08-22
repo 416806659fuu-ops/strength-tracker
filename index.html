@@ -11,7 +11,7 @@
 <meta name="apple-mobile-web-app-title" content="重训记录">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
 <link rel="manifest" href="manifest.json">
-<link rel="stylesheet" href="style.css?v=9">
+<link rel="stylesheet" href="style.css?v=10">
 </head>
 <body>
 
@@ -107,24 +107,33 @@
 
 </main>
 
-<!-- 训练项目编辑页：A / B 两套计划里各练什么 -->
+<!-- 训练项目编辑页：点身体部位找动作，拖进 A / B 计划的空位里，
+     位置就是训练顺序。 -->
 <div id="catalog-page" class="detail-overlay" style="display:none;">
   <div class="detail-header">
     <button id="catalog-back" aria-label="返回">‹</button>
     <h2>训练项目</h2>
   </div>
   <div class="detail-body">
-    <div id="catalog-list"></div>
-    <div class="catalog-add">
-      <input type="text" id="catalog-new-name" placeholder="新项目名称" autocomplete="off">
-      <select id="catalog-new-split">
-        <option value="A">A 计划</option>
-        <option value="B">B 计划</option>
-      </select>
-      <button id="catalog-add-btn">+</button>
+    <div class="builder-split-toggle" id="builder-split-toggle">
+      <button class="pill split-toggle-btn active" data-split="A">A 计划</button>
+      <button class="pill split-toggle-btn" data-split="B">B 计划</button>
     </div>
-    <button class="settings-btn" id="seed-catalog-btn">载入预设项目（A 计划 4 项 + B 计划 4 项）</button>
-    <p class="settings-note">点任意一行进入该项目的设置：重量、每次加减多少、热身组数、正式组数。腿部和肩背的加减幅度差别很大，所以每个项目各自设定。加进哪个计划，之后每次练那个计划都会带上它；删掉的动作如果已经有记录，会先禁止删除，得先去历史记录里处理。</p>
+
+    <div class="muscle-picker" id="builder-picker">
+      <div class="mp-figures">
+        <svg id="bp-front" aria-label="正面选择"></svg>
+        <svg id="bp-back" aria-label="背面选择"></svg>
+      </div>
+      <div class="mp-status" id="bp-status"></div>
+    </div>
+
+    <div class="builder-candidates" id="builder-candidates"></div>
+
+    <div class="settings-note" id="builder-slots-label"></div>
+    <div class="builder-slots" id="builder-slots"></div>
+
+    <p class="settings-note">拖动作卡片到空位＝加进这套计划，位置就是训练时的先后顺序。点已经排好的卡片能改重量/组数/删除。</p>
   </div>
 </div>
 
@@ -159,10 +168,10 @@
   <button data-tab="settings"><span class="tab-icon">⚙️</span>设置</button>
 </nav>
 
-<script src="app.js?v=9"></script>
-<script src="muscle-data.js?v=9"></script>
-<script src="strength.js?v=9"></script>
-<script src="session.js?v=9"></script>
-<script src="settings.js?v=9"></script>
+<script src="app.js?v=10"></script>
+<script src="muscle-data.js?v=10"></script>
+<script src="strength.js?v=10"></script>
+<script src="session.js?v=10"></script>
+<script src="settings.js?v=10"></script>
 </body>
 </html>

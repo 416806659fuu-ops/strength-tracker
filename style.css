@@ -551,73 +551,6 @@ main {
 .empty-hint p { margin: 0; }
 .empty-hint p + p { margin-top: 6px; color: var(--text-muted); font-size: 13px; }
 
-/* ---- 动作库（设置页）---- */
-.catalog-split-head {
-  margin: 14px 0 4px;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  color: var(--text-muted);
-}
-.catalog-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 11px 0;
-  border-bottom: 1px solid var(--gridline);
-  cursor: pointer;
-}
-/* 每组最后一行不要下边框——原来用 :last-of-type 判断，现在每组后面
-   多了一个 .catalog-split-add 按钮，改用 :has() 认「紧挨着加号按钮的
-   那一行」，两个计划各自的最后一行都能识别到，不只是整页最后一行 */
-.catalog-row:has(+ .catalog-split-add) { border-bottom: none; }
-/* 每套计划清单末尾自己的「+」，不用先滚到最下面从下拉菜单里选完计划再加 */
-.catalog-split-add {
-  display: block;
-  width: 100%;
-  margin-top: 4px;
-  padding: 8px;
-  border: 1px dashed var(--border);
-  border-radius: 8px;
-  background: none;
-  color: var(--text-muted);
-  font-size: 13px;
-}
-.catalog-row-main {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.catalog-name {
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-.catalog-sub {
-  font-size: 12px;
-  color: var(--text-secondary);
-  font-variant-numeric: tabular-nums;
-}
-.catalog-row > button {
-  flex: none;
-  border: 1px solid var(--border);
-  background: var(--page);
-  color: var(--text-secondary);
-  border-radius: 8px;
-  padding: 6px 9px;
-  font-size: 12px;
-  line-height: 1.2;
-}
-.catalog-chevron {
-  flex: none;
-  color: var(--text-muted);
-  font-size: 20px;
-  line-height: 1;
-  padding-left: 2px;
-}
-
 /* ---- 动作详情页（全屏覆盖层）---- */
 .detail-overlay {
   position: fixed;
@@ -740,38 +673,105 @@ main {
 .mp-status { font-size: 13px; color: var(--text-secondary); display: flex; align-items: center; gap: 6px; }
 .mp-dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
 
-.catalog-add {
-  display: flex;
-  gap: 6px;
-  margin: 10px 0;
+/* ---- 建计划页：点身体图选部位 → 候选卡片 → 拖进 A/B 计划的空位 ---- */
+.builder-split-toggle { display: flex; gap: 8px; margin: 4px 0 16px; }
+.split-toggle-btn { flex: 1; }
+
+.builder-candidates { margin-top: 16px; }
+.builder-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 8px;
+  margin-bottom: 10px;
 }
-.catalog-add input {
+.builder-card {
+  border: 1px solid var(--border);
+  background: var(--surface-1);
+  border-radius: 10px;
+  padding: 10px 12px;
+  touch-action: none; /* 卡片本身要接管拖拽手势，不能被浏览器当成滚动 */
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.builder-card-name { display: block; font-size: 14px; font-weight: 600; color: var(--text-primary); }
+.builder-card-sub { display: block; margin-top: 2px; font-size: 11px; color: var(--text-muted); }
+.builder-card.is-added { opacity: 0.4; cursor: default; }
+.builder-card.dragging-source { opacity: 0.3; }
+.builder-card:focus-visible { outline: 2px solid var(--series-blue); outline-offset: 1px; }
+
+.builder-custom-add { display: flex; gap: 6px; margin-top: 4px; }
+.builder-custom-add input {
   flex: 1;
   min-width: 0;
   border: 1px solid var(--border);
   background: var(--page);
   border-radius: 8px;
   padding: 8px 10px;
-  font-size: 16px;
+  font-size: 16px; /* 低于16px时iOS Safari聚焦会自动放大整页 */
   color: var(--text-primary);
 }
-.catalog-add select {
+.builder-custom-add button {
   flex: none;
-  border: 1px solid var(--border);
-  background: var(--page);
-  border-radius: 8px;
-  padding: 8px;
-  font-size: 16px;
-  color: var(--text-primary);
-}
-.catalog-add button {
-  flex: none;
-  width: 40px;
   border: none;
   background: var(--series-blue);
   color: #fff;
   border-radius: 8px;
-  font-size: 18px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.builder-slots {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 8px;
+  margin-top: 6px;
+}
+.builder-slot {
+  position: relative;
+  border-radius: 10px;
+  padding: 10px 12px 10px 30px;
+  min-height: 48px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.builder-slot-num {
+  position: absolute;
+  left: 10px;
+  top: 10px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.slot-empty {
+  border: 1px dashed var(--border);
+  background: none;
+}
+.slot-empty .builder-slot-placeholder { font-size: 13px; color: var(--text-muted); }
+.slot-filled {
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--c, var(--series-blue));
+  background: var(--surface-1);
+  cursor: pointer;
+}
+.builder-slot-name { font-size: 14px; font-weight: 600; color: var(--text-primary); }
+.builder-slot-sub { margin-top: 1px; font-size: 11px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.builder-slot.drop-target {
+  border-color: var(--series-blue);
+  background: var(--series-blue-wash);
+}
+
+/* 拖动时跟着手指走的卡片影子——固定定位、居中在指尖下方、不接收事件 */
+.builder-drag-ghost {
+  position: fixed;
+  z-index: 60;
+  pointer-events: none;
+  transform: translate(-50%, -50%) scale(1.04);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.18);
+  opacity: 0.95;
 }
 
 /* ---- 全屏训练页 ---- */
