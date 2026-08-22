@@ -178,8 +178,47 @@ function defaultWeightFor(ex, rec) {
   return ex.weight ?? '';
 }
 
+// 建计划页上线前，库里同名动作（卧推/传统硬拉/保加利亚单腿蹲这些）没有
+// libId，拖库里的候选卡片时认不出"已经加过"，会拖出一条重名的重复记录。
+// 这里做一次性清理：同一计划下同名的动作合并成一条，历史记录里指向被
+// 合并掉那条的 exerciseId 全部改指到保留的那条上（不会丢数据），优先保留
+// 有训练记录的那条——两条都没记录就留数组里第一条。开机时跑一次，
+// 没有重复就什么都不做，用户完全无感。
+function dedupeCatalog() {
+  const groups = new Map();
+  state.strength.catalog.forEach((ex) => {
+    const key = ex.split + '|' + ex.name;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(ex);
+  });
+  let merged = 0;
+  groups.forEach((list) => {
+    if (list.length < 2) return;
+    list.sort((a, b) => usageCount(b.id) - usageCount(a.id));
+    const keep = list[0];
+    for (let i = 1; i < list.length; i++) {
+      const dup = list[i];
+      Object.values(state.strength.days).forEach((day) => {
+        (day.exercises || []).forEach((rec) => {
+          if (rec.exerciseId === dup.id) rec.exerciseId = keep.id;
+        });
+      });
+      if (!keep.muscleGroup && dup.muscleGroup) keep.muscleGroup = dup.muscleGroup;
+      if (!keep.libId && dup.libId) keep.libId = dup.libId;
+      state.strength.catalog = state.strength.catalog.filter((e) => e.id !== dup.id);
+      merged++;
+    }
+  });
+  if (merged > 0) {
+    markDirty();
+    showToast(`已合并 ${merged} 个重复动作`);
+  }
+}
+
 // ---- 交互 ----
 function initStrength() {
+  dedupeCatalog();
+
   // 训练页平时永远是今天；时钟每 10 秒走一格，跨天（比如练到半夜十二点）
   // 自动翻到新的一天。但如果正在从历史页编辑某一天（viewingHistoryDate
   // 非空），这个检查得让路，不然 10 秒内就会被强制拽回今天。
@@ -1157,11 +1196,16 @@ function renderBuilderCandidates() {
     root.innerHTML = '<p class="settings-note">点上面身体部位，看看能加什么。</p>';
     return;
   }
-  const already = new Set(state.strength.catalog.filter((e) => e.split === builderSplit && e.libId).map((e) => e.libId));
+  // 判断"已加入"不能只看 libId——老数据（这套库上线前就手动加过的动作，
+  // 比如卧推/传统硬拉）压根没有 libId，只按 libId 比对的话库里同名候选
+  // 卡片会一直显示"能拖"，拖了就变成两条重名记录。加一层按名字比对兜底。
+  const inThisSplit = state.strength.catalog.filter((e) => e.split === builderSplit);
+  const already = new Set(inThisSplit.filter((e) => e.libId).map((e) => e.libId));
+  const existingNames = new Set(inThisSplit.map((e) => e.name));
   const items = EXERCISE_LIBRARY.filter((l) => l.muscleGroup === builderActiveGroup);
   const cards = items
     .map((lib) => {
-      const added = already.has(lib.libId);
+      const added = already.has(lib.libId) || existingNames.has(lib.name);
       return `
       <div class="builder-card${added ? ' is-added' : ''}" data-lib-id="${esc(lib.libId)}"${added ? '' : ' tabindex="0" role="button"'} aria-label="${esc(lib.name)}">
         <span class="builder-card-name">${esc(lib.name)}</span>
@@ -1268,7 +1312,9 @@ function startBuilderDrag(e, card, payload) {
 function handleBuilderDrop(targetIndex, payload) {
   const lib = EXERCISE_LIBRARY.find((l) => l.libId === payload.libId);
   if (!lib) return;
-  if (state.strength.catalog.some((e) => e.split === builderSplit && e.libId === lib.libId)) {
+  // 按 libId 或名字比对——candidatesEl 那边已经把"已加入"的卡片设成不能拖了，
+  // 这里再挡一道防御性检查，不指望上一层一定生效
+  if (state.strength.catalog.some((e) => e.split === builderSplit && (e.libId === lib.libId || e.name === lib.name))) {
     renderBuilder(); // 已经加过了，不重复加，原样重画一遍
     return;
   }

@@ -1420,18 +1420,21 @@ main {
 .confirm-letter {
   align-self: center;
   text-align: center;
-  font-size: 168px;
+  font-size: 148px;
   font-weight: 700;
   line-height: 1.1;
   margin: 0;
 }
-/* 第 3 行顶部起：清单 → 总时长 → 开始 → 编辑训练组合 */
+/* 第 3 行顶部起：清单 → 总时长 → 开始 → 返回重选/编辑训练组合。这屏还要
+   留出「返回重选」那一行，比原来多一行高度，字母和间距比之前又收紧了
+   一轮——不然最下面那行会被常驻的底部 tab bar 挡住（挡住过一次了，这次
+   加内容前先确认过量出来的高度真的够）。 */
 .confirm-bottom {
   grid-row: 3 / 5;
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding-top: 12px;
+  padding-top: 8px;
 }
 .confirm-list {
   width: 178px;
@@ -1449,13 +1452,13 @@ main {
   text-align: center;
   font-size: 16px;
   font-weight: 700;
-  margin: 14px 0 0;
+  margin: 10px 0 0;
 }
 .start-btn {
   display: block;
-  margin: 18px auto 0;
-  width: 110px;
-  height: 45px;
+  margin: 12px auto 0;
+  width: 100px;
+  height: 42px;
   border: none;
   border-radius: 999px;
   background: #2b78d7;
@@ -1464,13 +1467,17 @@ main {
   font-weight: 700;
   line-height: 1;
 }
+.confirm-links {
+  display: flex;
+  gap: 20px;
+  margin-top: 10px;
+}
 .rethink-btn {
   display: block;
-  margin: 10px auto 0;
   border: none;
   background: none;
   color: var(--text-muted);
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 600;
 }
 

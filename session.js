@@ -361,13 +361,22 @@ function renderPlanConfirm(body) {
         <div class="confirm-list">${rows}</div>
         <div class="confirm-total">需要时间：${totalMinutesLabel(list)}</div>
         <button class="start-btn" id="plan-start">开始</button>
-        <button class="rethink-btn" id="plan-edit-catalog">编辑训练组合</button>
+        <div class="confirm-links">
+          <button class="rethink-btn" id="plan-reselect">返回重选</button>
+          <button class="rethink-btn" id="plan-edit-catalog">编辑训练组合</button>
+        </div>
       </div>
     </div>`;
 }
 
 function openPlanConfirm(split) {
   pendingSplit = split;
+  renderStrength();
+}
+
+// 选完 A/B 之后反悔，回到「今天练什么」重新选——跟点错了/想换一个是同一种需求
+function reselectPlan() {
+  pendingSplit = null;
   renderStrength();
 }
 
@@ -1053,6 +1062,10 @@ function initSession() {
     }
     if (e.target.closest('#plan-start')) {
       confirmPlan();
+      return;
+    }
+    if (e.target.closest('#plan-reselect')) {
+      reselectPlan();
       return;
     }
     if (e.target.closest('#plan-edit-catalog')) {
