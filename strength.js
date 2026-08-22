@@ -76,6 +76,14 @@ function visibleExercises(day) {
       seen.add(ex.id);
     }
   });
+  // 训练中临时调过今天的顺序（器械被占用先跳去做别的）——只影响这一天，
+  // 动作库里的固定顺序（上面 exercisesForSplit 用的 order）不受影响。
+  // 没提到的动作（比如调完顺序后才新增的）排在最后，相对顺序不变——
+  // Array.sort 是稳定排序，两边都算 Infinity 时不会乱动它们的相对位置。
+  if (day.exerciseOrder && day.exerciseOrder.length) {
+    const rank = new Map(day.exerciseOrder.map((id, i) => [id, i]));
+    list.sort((a, b) => (rank.has(a.id) ? rank.get(a.id) : Infinity) - (rank.has(b.id) ? rank.get(b.id) : Infinity));
+  }
   return list;
 }
 
@@ -203,24 +211,41 @@ function initStrength() {
     showToast(`已保存 ${viewingHistoryDate ? viewingHistoryDate.replace(/-/g, '/') : ''} 的修改`);
   });
 
-  // 历史页点某一天 = 进补记模式改那天的记录：加/删组、改计划归属，
-  // 复用表单模式本来就有的这套逻辑（本来就不认「今天」，只认 strengthDate）。
+  // 历史页现在是日历：点某一天 = 进补记模式改那天的记录（加/删组、改计划
+  // 归属，复用表单模式本来就有的这套逻辑，本来就不认「今天」，只认
+  // strengthDate）；翻月不用重新打开页面，就地重画日历。删除整天记录的
+  // 入口挪到了补记页里的「删除这一天的记录」按钮，日历格子太小放不下滑动
+  // 删除的手势。
   const historyRoot = document.getElementById('strength-history');
   if (historyRoot) {
     historyRoot.addEventListener('click', (e) => {
-      const delBtn = e.target.closest('.h-day .swipe-delete-btn');
-      if (delBtn) {
-        const date = delBtn.dataset.date;
-        if (confirm(`删除 ${date} 的整条训练记录？无法恢复。`)) {
-          delete state.strength.days[date];
-          markDirty();
-          renderStrengthHistory();
-        }
+      if (e.target.closest('#month-prev')) {
+        historyMonth = shiftMonth(historyMonth, -1);
+        renderStrengthHistory();
         return;
       }
-      const dayEl = e.target.closest('.h-day');
-      if (!dayEl || !dayEl.dataset.date) return;
-      openHistoryDayEdit(dayEl.dataset.date);
+      if (e.target.closest('#month-next')) {
+        historyMonth = shiftMonth(historyMonth, 1);
+        renderStrengthHistory();
+        return;
+      }
+      const cell = e.target.closest('.cal-day');
+      if (!cell || !cell.dataset.date) return;
+      openHistoryDayEdit(cell.dataset.date);
+    });
+  }
+
+  const deleteDayBtn = document.getElementById('delete-history-day-btn');
+  if (deleteDayBtn) {
+    deleteDayBtn.addEventListener('click', () => {
+      if (!viewingHistoryDate) return;
+      if (!confirm(`删除 ${viewingHistoryDate} 的整条训练记录？无法恢复。`)) return;
+      delete state.strength.days[viewingHistoryDate];
+      markDirty();
+      viewingHistoryDate = null;
+      strengthDate = todayKey();
+      forceFormMode = false;
+      switchView('history');
     });
   }
 
@@ -661,6 +686,9 @@ function renderStrength() {
   // 明确的「存好了」反馈——用户反馈过一次"输入不进去也存不上"，光是自动保存
   // 不够让人放心，加个能主动点一下的确认动作。
   document.getElementById('confirm-edit-btn').style.display = viewingHistoryDate ? '' : 'none';
+  // 整天删除的入口：日历格子太小放不下滑动手势，挪到这——只在看历史（不是今天）时才有意义
+  const deleteDayBtn = document.getElementById('delete-history-day-btn');
+  if (deleteDayBtn) deleteDayBtn.style.display = viewingHistoryDate ? '' : 'none';
 
   if (useSession) {
     window.renderSession();
@@ -886,6 +914,23 @@ function renderExerciseDetail() {
     </div>`
     : '';
 
+  // 练哪个部位跟「仅本次/永久保存」无关——不存在"今天临时换个部位"这种
+  // 需求，颜色分类本来就该是这个动作永远的属性。之前把它塞在 identityBlock
+  // 里，跟名称/计划/类型一起被 showOnce 挡住了：从训练中点"✎ 编辑"进来
+  // 默认就是「仅本次」模式，结果已经在计划里的动作想设置部位都设置不了，
+  // 也是用户反馈"没颜色也没法改"的根源。改成不管哪个模式都显示。
+  const muscleBlock = detailField(
+    '练哪个部位',
+    '决定这个动作在训练页/历史里显示的颜色。点身体图比在 6 个文字标签里找快。',
+    `<div class="muscle-picker" id="muscle-picker">
+      <div class="mp-figures">
+        <svg id="mp-front" aria-label="正面选择"></svg>
+        <svg id="mp-back" aria-label="背面选择"></svg>
+      </div>
+      <div class="mp-status" id="mp-status"></div>
+    </div>`
+  );
+
   // 名称/计划归属/类型/删除都是目录的身份字段，「仅本次」模式下没有意义，不显示
   const identityBlock = showOnce
     ? ''
@@ -906,17 +951,6 @@ function renderExerciseDetail() {
         <button class="pill kind-btn${!cardio ? ' active' : ''}" data-kind="strength">力量</button>
         <button class="pill kind-btn${cardio ? ' active' : ''}" data-kind="cardio">有氧</button>
       </div>`
-    )}
-    ${detailField(
-      '练哪个部位',
-      '决定这个动作在训练页/历史里显示的颜色。点身体图比在 6 个文字标签里找快。',
-      `<div class="muscle-picker" id="muscle-picker">
-        <div class="mp-figures">
-          <svg id="mp-front" aria-label="正面选择"></svg>
-          <svg id="mp-back" aria-label="背面选择"></svg>
-        </div>
-        <div class="mp-status" id="mp-status"></div>
-      </div>`
     )}`;
 
   // 没有「归档」这个中间状态了——目录里的动作要么在（对之后每次训练都生效，
@@ -934,6 +968,7 @@ function renderExerciseDetail() {
 
   body.innerHTML = `
     ${scopeToggle}
+    ${muscleBlock}
     ${identityBlock}
     ${cardio ? cardioBlock : strengthBlock}
     ${dangerBlock}`;
@@ -1331,7 +1366,19 @@ function initBuilder() {
 
 
 // ---- 历史与分析页 ----
-// 独立重训 app 的历史 tab。KPI + 最近训练的容量柱状图 + 逐日明细。
+// 独立重训 app 的历史 tab。KPI + 最近训练的容量柱状图 + 按月看的日历。
+let historyMonth = todayKey().slice(0, 7); // 'YYYY-MM'，日历当前翻到哪个月
+
+function shiftMonth(ym, delta) {
+  const [y, m] = ym.split('-').map(Number);
+  const d = new Date(y, m - 1 + delta, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+function daysInMonth(ym) {
+  const [y, m] = ym.split('-').map(Number);
+  return new Date(y, m, 0).getDate();
+}
+
 function renderStrengthHistory() {
   const root = document.getElementById('strength-history');
   if (!root) return;
@@ -1344,18 +1391,19 @@ function renderStrengthHistory() {
     root.innerHTML = '<div class="empty-hint"><p>还没有训练记录。</p><p>练完第一天，这里就会有内容。</p></div>';
     return;
   }
+  const byDate = new Map(entries);
 
-  const month = todayKey().slice(0, 7);
   let monthCount = 0;
   let monthVol = 0;
   entries.forEach(([d, rec]) => {
-    if (d.slice(0, 7) === month) {
+    if (d.slice(0, 7) === historyMonth) {
       monthCount += 1;
       monthVol += dayTotals(rec).volume;
     }
   });
 
-  // 最近 12 次训练的容量柱状图，按 A / B 计划着色
+  // 最近 12 次训练的容量柱状图，按 A / B 计划着色——跟日历翻到哪个月无关，
+  // 是独立的「最近趋势」视图。
   const chart = entries.slice(0, 12).reverse();
   const maxV = Math.max(...chart.map(([, r]) => dayTotals(r).volume), 1);
   const bars = chart
@@ -1371,41 +1419,34 @@ function renderStrengthHistory() {
     })
     .join('');
 
-  const list = entries
-    .map(([d, rec]) => {
-      const rows = (rec.exercises || [])
-        .map((r) => {
-          const rawEx = exerciseById(r.exerciseId);
-          if (!rawEx) return '';
-          const ex = effectiveExercise(rawEx, r);
-          if (isCardio(ex)) {
-            return `<div class="h-ex"><span>${esc(ex.name)}</span><span class="h-sets">${Math.round((r.durationSec || 0) / 60)} min</span></div>`;
-          }
-          const sets = r.sets || [];
-          if (!sets.length) return '';
-          const reps = sets.map((x) => repsLabel(x)).join(' / ');
-          const w = weightLabel(ex, sets[sets.length - 1].weight);
-          return `<div class="h-ex"><span>${esc(ex.name)}</span><span class="h-sets">${w} · ${reps}</span></div>`;
-        })
-        .join('');
-      const t = dayTotals(rec);
-      return `
-        <div class="h-day swipe-row" data-date="${d}">
-          <div class="swipe-track">
-            <div class="swipe-content" data-date="${d}">
-              <div class="h-day-head">
-                <b>${d.replace(/-/g, '/')}</b>
-                <span class="h-split ${rec.split}">${rec.split}</span>
-                <span class="h-vol">${fmt(t.volume)} kg·次</span>
-                <span class="h-edit-hint">✎</span>
-              </div>
-              ${rows}
-            </div>
-            <button class="swipe-delete-btn" data-date="${d}" aria-label="删除这一天">删除</button>
-          </div>
-        </div>`;
-    })
-    .join('');
+  // 日历格子：本月每一天，练了 A/B 哪个计划就着哪个颜色，没练/未来的日子灰掉
+  const [y, m] = historyMonth.split('-').map(Number);
+  const total = daysInMonth(historyMonth);
+  const today = todayKey();
+  const firstDow = new Date(y, m - 1, 1).getDay(); // 0=周日
+  const leadBlanks = (firstDow + 6) % 7; // 转成周一开头
+  let cells = '';
+  for (let i = 0; i < leadBlanks; i++) cells += `<div class="cal-day empty"></div>`;
+  for (let d = 1; d <= total; d++) {
+    const dateKey = `${historyMonth}-${String(d).padStart(2, '0')}`;
+    const rec = byDate.get(dateKey);
+    let cls = 'cal-day';
+    if (dateKey === today) cls += ' today';
+    if (dateKey > today) {
+      cls += ' future';
+      cells += `<div class="${cls}"><span class="cal-day-num">${d}</span></div>`;
+      continue;
+    }
+    if (rec) {
+      cls += rec.split === 'A' ? ' split-a' : ' split-b';
+      const v = dayTotals(rec).volume;
+      cells += `<div class="${cls}" data-date="${dateKey}"><span class="cal-day-num">${d}</span><span class="cal-day-val">${rec.split}</span></div>`;
+    } else {
+      cls += ' nodata';
+      cells += `<div class="${cls}" data-date="${dateKey}"><span class="cal-day-num">${d}</span></div>`;
+    }
+  }
+  const weeks = Math.ceil((leadBlanks + total) / 7);
 
   root.innerHTML = `
     <div class="kpi-row">
@@ -1413,14 +1454,27 @@ function renderStrengthHistory() {
       <div class="kpi-tile"><div class="kpi-label">本月容量</div><div class="kpi-value">${fmt(monthVol)}</div></div>
       <div class="kpi-tile"><div class="kpi-label">累计</div><div class="kpi-value">${entries.length} 次</div></div>
     </div>
+    <div class="month-nav">
+      <button id="month-prev" aria-label="上个月">‹</button>
+      <span class="month-label">${y}年${m}月</span>
+      <button id="month-next" aria-label="下个月"${historyMonth >= today.slice(0, 7) ? ' disabled' : ''}>›</button>
+    </div>
+    <div class="calendar-card">
+      <div class="calendar-weekdays"><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span></div>
+      <div class="calendar-grid" style="grid-template-rows:repeat(${weeks}, 1fr)">${cells}</div>
+      <div class="calendar-legend">
+        <span><span class="dot" style="background:var(--series-blue)"></span>A 计划</span>
+        <span><span class="dot" style="background:var(--series-aqua)"></span>B 计划</span>
+        <span><span class="dot" style="background:var(--gridline)"></span>没练</span>
+      </div>
+    </div>
     <div class="hchart">
       <div class="hchart-legend">
         <span><span class="dot" style="background:var(--series-blue)"></span>A 计划</span>
         <span><span class="dot" style="background:var(--series-aqua)"></span>B 计划</span>
       </div>
       <div class="hchart-bars">${bars}</div>
-    </div>
-    <div class="h-list">${list}</div>`;
+    </div>`;
 }
 
 window.initStrength = initStrength;
