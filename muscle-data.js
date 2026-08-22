@@ -5,8 +5,10 @@
 // 身体，没必要连女版数据一起搬（省一半体积）。完整许可条款：
 // https://opensource.org/licenses/MIT
 
-// 6 个部位固定色，训练卡片的颜色也从这张表查（strength.js/session.js 里
-// 用 exerciseColor(ex) 取色，不再按位置循环分配）。
+// 6 个部位固定色（身体图上能点的区域），训练卡片的颜色也从这张表查
+// （strength.js/session.js 里用 exerciseColor(ex) 取色，不再按位置循环
+// 分配）。有氧不在这张表里——它不对应身体图上的哪一块，是按 kind 直接
+// 判的，见下面 exerciseColor()。
 const MUSCLE_GROUPS = {
   chest: { label: '胸', color: '#d97757' },
   back: { label: '背', color: '#4f9d8f' },
@@ -15,6 +17,7 @@ const MUSCLE_GROUPS = {
   glutes: { label: '臀', color: '#c9598f' },
   legs: { label: '腿', color: '#7fb856' },
 };
+const CARDIO_COLOR = '#d9a441'; // 有氧统一这一个颜色，不管挂在哪个部位下面
 const DEFAULT_EXERCISE_COLOR = '#9aa0aa'; // 还没选部位的动作，中性灰兜底
 
 // 建计划页用的预设动作库：点身体部位过滤出来的候选卡片就是这份数据。
@@ -25,6 +28,9 @@ const EXERCISE_LIBRARY = [
   { libId: 'bulgarian-split-squat', name: '保加利亚单腿蹲', muscleGroup: 'legs', kind: 'strength', weightMode: 'unilateral', weight: 4, step: 1, warmupSets: 0, workSets: 4 },
   { libId: 'leg-press', name: '腿举', muscleGroup: 'legs', kind: 'strength', weightMode: 'single', weight: 40, step: 5, warmupSets: 1, workSets: 4 },
   { libId: 'calf-raise', name: '提踵', muscleGroup: 'legs', kind: 'strength', weightMode: 'bodyweight', warmupSets: 0, workSets: 4 },
+  // muscleGroup 在这留着不是为了配色（有氧统一走 exerciseColor() 的
+  // kind 判断），是为了这张卡片能在建计划页里被找到——候选卡片只在点了
+  // 身体图某个部位之后才出现，删掉 muscleGroup 这张卡片就再也搜不到了。
   { libId: 'incline-walk', name: '爬坡走', muscleGroup: 'legs', kind: 'cardio', durationMin: 20 },
 
   { libId: 'glute-bridge', name: '臀桥', muscleGroup: 'glutes', kind: 'strength', weightMode: 'bodyweight', warmupSets: 0, workSets: 4 },
@@ -53,6 +59,7 @@ const EXERCISE_LIBRARY = [
 ];
 
 function exerciseColor(ex) {
+  if (ex && ex.kind === 'cardio') return CARDIO_COLOR; // 有氧不看 muscleGroup，统一一个颜色
   const g = ex && ex.muscleGroup && MUSCLE_GROUPS[ex.muscleGroup];
   return g ? g.color : DEFAULT_EXERCISE_COLOR;
 }

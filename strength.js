@@ -958,17 +958,27 @@ function renderExerciseDetail() {
   // 里，跟名称/计划/类型一起被 showOnce 挡住了：从训练中点"✎ 编辑"进来
   // 默认就是「仅本次」模式，结果已经在计划里的动作想设置部位都设置不了，
   // 也是用户反馈"没颜色也没法改"的根源。改成不管哪个模式都显示。
-  const muscleBlock = detailField(
-    '练哪个部位',
-    '决定这个动作在训练页/历史里显示的颜色。点身体图比在 6 个文字标签里找快。',
-    `<div class="muscle-picker" id="muscle-picker">
-      <div class="mp-figures">
-        <svg id="mp-front" aria-label="正面选择"></svg>
-        <svg id="mp-back" aria-label="背面选择"></svg>
-      </div>
-      <div class="mp-status" id="mp-status"></div>
-    </div>`
-  );
+  //
+  // 有氧动作是例外：颜色统一固定成一个（exerciseColor() 里按 kind 直接判，
+  // 不看 muscleGroup），点身体图选哪块肌肉都不会改变这个动作显示的颜色——
+  // 那这个交互式选择器留着就是摆设，改成一行说明+色块，不给假的可交互感。
+  const muscleBlock = cardio
+    ? detailField(
+        '颜色',
+        '有氧动作不分肌肉部位，统一用这个颜色，训练页/历史里都认得出来。',
+        `<div class="mp-status"><span class="mp-dot" style="background:${CARDIO_COLOR}"></span>有氧</div>`
+      )
+    : detailField(
+        '练哪个部位',
+        '决定这个动作在训练页/历史里显示的颜色。点身体图比在 6 个文字标签里找快。',
+        `<div class="muscle-picker" id="muscle-picker">
+          <div class="mp-figures">
+            <svg id="mp-front" aria-label="正面选择"></svg>
+            <svg id="mp-back" aria-label="背面选择"></svg>
+          </div>
+          <div class="mp-status" id="mp-status"></div>
+        </div>`
+      );
 
   // 名称/计划归属/类型/删除都是目录的身份字段，「仅本次」模式下没有意义，不显示
   const identityBlock = showOnce
