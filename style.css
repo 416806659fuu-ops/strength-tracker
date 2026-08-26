@@ -830,8 +830,10 @@ main {
   flex-direction: column;
 }
 
-/* 名称可能很长（保加利亚单腿蹲），挤在一行会把「动作要点」顶歪，
-   所以两行：名称一行（可换行），要点按钮独立一行靠左 */
+/* 名称可能很长（保加利亚单腿蹲），挤在一行会把按钮顶歪，所以两行：
+   名称一行（可换行），下面一行放所有操作按钮。按钮已经涨到 5 个
+   （要点/编辑/调顺序/少一组/撤销），一行排不下就用 flex-wrap 换行，
+   不再给每个按钮单独占一整行——那样在严格的不滚动布局里太吃竖直空间。 */
 .name-block {
   display: flex;
   flex-direction: column;
@@ -843,13 +845,20 @@ main {
   font-weight: 600;
   line-height: 1.2;
 }
+.cue-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 16px;
+}
 .cue-btn {
   border: none;
   background: none;
   color: var(--text-muted);
-  font-size: 20px;
+  font-size: 17px;
   font-weight: 600;
   padding: 0;
+  white-space: nowrap;
 }
 .cue-arrow { font-size: 13px; }
 

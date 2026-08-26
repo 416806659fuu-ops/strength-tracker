@@ -591,6 +591,7 @@ function renderCardioCard(ex, day) {
   const rec = recordFor(day, ex.id);
   const mins = rec && rec.durationSec ? Math.round(rec.durationSec / 60) : '';
   const planned = ex.durationMin ?? 20;
+  const inclineSuffix = ex.incline ? ` · 坡度${fmt(ex.incline)}%` : '';
   return `
     <div class="exercise-card" data-ex="${esc(ex.id)}">
       <div class="exercise-head">
@@ -598,7 +599,7 @@ function renderCardioCard(ex, day) {
         <button class="exercise-edit-btn" data-ex="${esc(ex.id)}" aria-label="编辑这个动作">✎</button>
         <span class="exercise-summary">${mins ? mins + ' min' : ''}</span>
       </div>
-      <div class="last-session muted">计划 ${planned} 分钟有氧</div>
+      <div class="last-session muted">计划 ${planned} 分钟有氧${inclineSuffix}</div>
       <div class="add-row">
         <input class="cardio-min" type="text" inputmode="numeric" autocomplete="off"
                value="${mins}" placeholder="实际做了几分钟">
@@ -790,6 +791,7 @@ function exerciseSummary(ex) {
   const parts = [splitLabel(ex.split)];
   if (isCardio(ex)) {
     parts.push(`${ex.durationMin ?? 20} min 有氧`);
+    if (ex.incline) parts.push(`坡度${fmt(ex.incline)}%`);
     return parts.join(' · ');
   }
   parts.push(weightLabel(ex, ex.weight));
@@ -930,11 +932,17 @@ function renderExerciseDetail() {
     ${detailField('正式组', '', setsSelect('d-work', ex.workSets, 8))}
   `;
 
-  const cardioBlock = detailField(
-    '时长（分钟）',
-    '训练页会给你一个倒计时盘。有氧不记重量和次数，消耗的卡路里你在摄入页手动填。',
-    `<input class="d-duration" type="text" inputmode="numeric" value="${ex.durationMin ?? 20}">`
-  );
+  const cardioBlock = `
+    ${detailField(
+      '时长（分钟）',
+      '训练页会给你一个倒计时盘。有氧不记重量和次数，消耗的卡路里你在摄入页手动填。',
+      `<input class="d-duration" type="text" inputmode="numeric" value="${ex.durationMin ?? 20}">`
+    )}
+    ${detailField(
+      '坡度（%）',
+      '跑步机/走步机的坡度刻度，跟时长一起显示在训练页。不需要就填 0。',
+      `<input class="d-incline" type="text" inputmode="decimal" value="${ex.incline ?? 0}">`
+    )}`;
 
   const used = usageCount(rawEx.id);
   const usedNote = used > 0 ? `已经在 ${used} 天的记录里出现过，不能删除。` : '还没有任何记录，可以直接删除。';
@@ -1168,6 +1176,10 @@ function initExerciseDetail() {
       const v = evalCalExpr(t.value);
       target.durationMin = v && v > 0 ? Math.round(v) : 20;
       t.value = target.durationMin;
+    } else if (t.classList.contains('d-incline')) {
+      const v = evalCalExpr(t.value);
+      target.incline = v && v > 0 ? v : 0;
+      t.value = target.incline;
     }
     markDirty();
   });

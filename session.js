@@ -193,7 +193,7 @@ document.addEventListener('visibilitychange', () => {
 });
 
 // ---- 倒计时 ----
-function startRest(seconds, confirms) {
+function startRest(seconds, confirms, hint) {
   primeAudio();
   if (seconds <= 0) {
     if (confirms) advanceAfterRest();
@@ -208,7 +208,7 @@ function startRest(seconds, confirms) {
   acquireWakeLock();
   zone.classList.add('resting');
   zone.classList.remove('rest-done');
-  setRestHint('点圆环可以提前结束休息');
+  setRestHint(hint || '点圆环可以提前结束休息');
   // 暂停型休息（不推进）才显示「提前结束训练」——想收工先按暂停缓一缓再决定
   zone.classList.toggle('adjust', !confirms);
   tickRest();
@@ -410,7 +410,7 @@ function confirmSet() {
     const rest = state.settings.rest || DEFAULT_REST;
     const seconds = rest.betweenSides ?? DEFAULT_REST.betweenSides;
     renderSession(); // 界面先推进到右侧转轮，再盖上倒计时盘
-    startRest(seconds, true);
+    startRest(seconds, true, '接下来：右侧 · 点圆环可以提前结束休息');
     return;
   }
 
@@ -429,6 +429,75 @@ function confirmSet() {
   // 先把界面推进到下一组，再盖上倒计时盘
   renderSession();
   startRest(seconds, true);
+}
+
+// 「少一组」：今天这个动作练不动了，把剩下的计划组数减一——只影响
+// 今天（写进 rec.override，跟「仅本次」编辑走同一套合并机制），
+// 动作库里永久的组数设置不变。不能减到已经做完的组数以下。
+function reduceOneSet() {
+  const day = sEnsureDay(strengthDate);
+  const list = sessionExercises(day);
+  const pos = currentPos(list);
+  if (!pos) return;
+  const item = list[pos.exIdx];
+  const ex = item.ex;
+  if (isCardio(ex)) return; // 有氧没有组数概念
+  const doneWork = Math.max(0, item.done - (ex.warmupSets || 0));
+  const newWorkSets = Math.max(doneWork, (ex.workSets || 0) - 1);
+  if (newWorkSets === (ex.workSets || 0)) {
+    showToast('已经是今天做过的组数了');
+    return;
+  }
+  const rec = ensureRecord(day, ex.id);
+  rec.override = Object.assign({}, rec.override, { workSets: newWorkSets });
+  markDirty();
+  renderSession();
+  showToast('今天这个动作少做一组');
+}
+
+// 「撤销上一组」：记错了退回上一步。
+// 左右分计正等右边时，这一步还没写进 rec.sets，撤销只是退回左边重录；
+// 已经写进 rec.sets/durationSec 的，弹出最后一条。
+function undoLastSet() {
+  const day = sEnsureDay(strengthDate);
+  const list = sessionExercises(day);
+  const pos = currentPos(list);
+
+  if (pos) {
+    const ex = list[pos.exIdx].ex;
+    if (ex.weightMode === 'unilateral' && unilateralStep === 'R') {
+      unilateralStep = 'L';
+      clearRestState();
+      renderSession();
+      showToast('已退回左侧，重新记录');
+      return;
+    }
+  }
+
+  let idx = pos ? pos.exIdx : list.length - 1;
+  while (idx >= 0) {
+    const item = list[idx];
+    if (item && item.done > 0) {
+      const ex = item.ex;
+      const rec = recordFor(day, ex.id);
+      if (!rec) { idx--; continue; }
+      if (isCardio(ex)) {
+        if (rec.durationSec == null) { idx--; continue; }
+        delete rec.durationSec;
+      } else {
+        if (!rec.sets.length) { idx--; continue; }
+        rec.sets.pop();
+        if (ex.weightMode === 'unilateral') unilateralStep = 'L';
+      }
+      markDirty();
+      clearRestState();
+      renderSession();
+      showToast('已撤销上一组');
+      return;
+    }
+    idx--;
+  }
+  showToast('还没有记录可以撤销');
 }
 
 // 「休」：只休息，不确认、不推进
@@ -495,6 +564,7 @@ function startCardio() {
   primeAudio();
   cardioEndAt = Date.now() + (ex.durationMin ?? 20) * 60 * 1000;
   acquireWakeLock();
+  renderSession(); // 切换成「提前结束并记录」按钮，不然点了开始还是那个开始按钮
   tickCardio();
   clearInterval(restTimer);
   restTimer = setInterval(tickCardio, 500);
@@ -756,21 +826,26 @@ function renderSession() {
   // 有氧：一个大计时盘，不是滚轮
   if (isCardio(ex)) {
     const mins = ex.durationMin ?? 20;
+    const incline = ex.incline || 0;
+    const inclineSuffix = incline > 0 ? ` · 坡度${fmt(incline)}%` : '';
     body.innerHTML = `
       <div class="wheel-zone">
         <div class="cardio-panel">
           <div class="cardio-clock" id="cardio-clock">${mins}:00</div>
           ${cardioEndAt
             ? '<button class="pill wide" id="cardio-stop">提前结束并记录</button>'
-            : `<button class="pill wide primary" id="cardio-start">开始 ${mins} 分钟</button>`}
+            : `<button class="pill wide primary" id="cardio-start">开始 ${mins} 分钟${inclineSuffix}</button>`}
         </div>
       </div>
       <div class="info-zone">
         <div class="name-block">
           <span class="session-exercise-name">${esc(ex.name)}</span>
-          <button class="cue-btn session-edit-exercise-btn" data-ex="${esc(ex.id)}" aria-label="编辑这个动作">✎ 编辑</button>
+          <div class="cue-actions">
+            <button class="cue-btn session-edit-exercise-btn" data-ex="${esc(ex.id)}" aria-label="编辑这个动作">✎ 编辑</button>
+            <button class="cue-btn" id="btn-undo-set" aria-label="撤销上一步">↺ 撤销</button>
+          </div>
         </div>
-        <div class="prev-row"><span class="prev-empty">计划 ${mins} 分钟有氧</span></div>
+        <div class="prev-row"><span class="prev-empty">计划 ${mins} 分钟有氧${inclineSuffix}</span></div>
         <button class="finish-btn finish-day-btn">提前结束</button>
       </div>`;
     return;
@@ -849,9 +924,13 @@ function renderSession() {
     <div class="info-zone">
       <div class="name-block">
         <span class="session-exercise-name">${esc(ex.name)}${warm ? '<span class="warm-badge">热身</span>' : ''}${isUnilateral ? `<span class="side-badge">${unilateralStep === 'L' ? '左侧' : '右侧'}</span>` : ''}</span>
-        <button class="cue-btn" id="btn-cues">动作要点 <span class="cue-arrow">▶</span></button>
-        <button class="cue-btn session-edit-exercise-btn" data-ex="${esc(ex.id)}" aria-label="编辑这个动作">✎ 编辑</button>
-        <button class="cue-btn" id="btn-reorder" aria-label="调整今天的顺序">⇅ 调整顺序</button>
+        <div class="cue-actions">
+          <button class="cue-btn" id="btn-cues">动作要点 <span class="cue-arrow">▶</span></button>
+          <button class="cue-btn session-edit-exercise-btn" data-ex="${esc(ex.id)}" aria-label="编辑这个动作">✎ 编辑</button>
+          <button class="cue-btn" id="btn-reorder" aria-label="调整今天的顺序">⇅ 调整顺序</button>
+          <button class="cue-btn" id="btn-reduce-set" aria-label="今天少做一组">− 少一组</button>
+          <button class="cue-btn" id="btn-undo-set" aria-label="撤销上一步">↺ 撤销</button>
+        </div>
       </div>
       ${prevRow}
       <div class="weight-row">
@@ -1083,6 +1162,14 @@ function initSession() {
     }
     if (e.target.closest('#btn-reorder')) {
       openReorderSheet();
+      return;
+    }
+    if (e.target.closest('#btn-reduce-set')) {
+      reduceOneSet();
+      return;
+    }
+    if (e.target.closest('#btn-undo-set')) {
+      undoLastSet();
       return;
     }
     if (e.target.closest('#btn-confirm')) {
