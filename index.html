@@ -11,7 +11,7 @@
 <meta name="apple-mobile-web-app-title" content="重训记录">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
 <link rel="manifest" href="manifest.json">
-<link rel="stylesheet" href="style.css?v=14">
+<link rel="stylesheet" href="style.css?v=15">
 </head>
 <body>
 
@@ -161,20 +161,6 @@
   <div id="detail-body" class="detail-body"></div>
 </div>
 
-<!-- 训练中临时调整今天的动作顺序：器械被占用时先跳去做别的，
-     只影响今天，不改动作库里的固定顺序。 -->
-<div id="reorder-sheet" class="detail-overlay" style="display:none;">
-  <div class="detail-header">
-    <button id="reorder-back" aria-label="返回">‹</button>
-    <h2>调整今天的顺序</h2>
-  </div>
-  <div class="detail-body">
-    <p class="settings-note">拖动调整——比如器械被占用了，先跳到别的动作。这只影响今天，动作库里的固定顺序不会变。</p>
-    <div id="reorder-list"></div>
-    <button class="settings-btn" id="reorder-reset-btn">恢复默认顺序</button>
-  </div>
-</div>
-
 <div class="toast" id="toast"></div>
 
 <nav class="tab-bar">
@@ -183,10 +169,10 @@
   <button data-tab="settings"><span class="tab-icon">⚙️</span>设置</button>
 </nav>
 
-<script src="app.js?v=14"></script>
-<script src="muscle-data.js?v=14"></script>
-<script src="strength.js?v=14"></script>
-<script src="session.js?v=14"></script>
-<script src="settings.js?v=14"></script>
+<script src="app.js?v=15"></script>
+<script src="muscle-data.js?v=15"></script>
+<script src="strength.js?v=15"></script>
+<script src="session.js?v=15"></script>
+<script src="settings.js?v=15"></script>
 </body>
 </html>

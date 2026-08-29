@@ -96,8 +96,16 @@ function defaultRepsFor(ex, setIdx, rec, side) {
   return 10;
 }
 
-function defaultSessionWeight(ex, rec) {
+// 跟 defaultRepsFor 同一套优先级：先看上次练这个动作时同一组号用的重量
+// （跟着当次的递增/递减节奏走），没有历史就退回今天已经记的最后一组，
+// 都没有才用动作库里的默认重量——原来只看 today/目录默认，新开一组
+// 永远弹回目录里的初始值，改一次重量下次照样要重改一次。
+function defaultSessionWeight(ex, setIdx, rec) {
   if (isCardio(ex) || ex.weightMode === 'bodyweight') return null;
+  const prev = lastSession(ex.id, strengthDate);
+  if (prev && prev.sets[setIdx] != null && prev.sets[setIdx].weight != null) {
+    return prev.sets[setIdx].weight;
+  }
   if (rec && rec.sets.length) {
     const w = rec.sets[rec.sets.length - 1].weight;
     if (w != null) return w;
@@ -724,8 +732,10 @@ function renderProgressBar(list, curIdx) {
       const color = exerciseColor(item.ex);
       const pct = item.planned ? Math.min(100, (item.done / item.planned) * 100) : 0;
       const isCur = i === curIdx;
+      const done = item.planned > 0 && item.done >= item.planned;
+      // 没做完的段可以点＝跳过去接下来做它；已完成的段点了没意义，不给点击手势
       return `
-        <div class="prog-seg${isCur ? ' current' : ''}">
+        <div class="prog-seg${isCur ? ' current' : ''}${done ? '' : ' prog-clickable'}" data-ex="${esc(item.ex.id)}">
           <div class="prog-fill" style="width:${pct}%;background:${color}"></div>
         </div>`;
     })
@@ -851,7 +861,7 @@ function renderSession() {
     return;
   }
 
-  sessionWeight = defaultSessionWeight(ex, item.rec);
+  sessionWeight = defaultSessionWeight(ex, pos.setIdx, item.rec);
   const isUnilateral = ex.weightMode === 'unilateral';
   const reps = isUnilateral ? defaultRepsFor(ex, pos.setIdx, item.rec, unilateralStep) : defaultRepsFor(ex, pos.setIdx, item.rec);
   const warm = isWarmupIdx(ex, pos.setIdx);
@@ -927,7 +937,6 @@ function renderSession() {
         <div class="cue-actions">
           <button class="cue-btn" id="btn-cues">动作要点 <span class="cue-arrow">▶</span></button>
           <button class="cue-btn session-edit-exercise-btn" data-ex="${esc(ex.id)}" aria-label="编辑这个动作">✎ 编辑</button>
-          <button class="cue-btn" id="btn-reorder" aria-label="调整今天的顺序">⇅ 调整顺序</button>
           <button class="cue-btn" id="btn-reduce-set" aria-label="今天少做一组">− 少一组</button>
           <button class="cue-btn" id="btn-undo-set" aria-label="撤销上一步">↺ 撤销</button>
         </div>
@@ -999,115 +1008,23 @@ window.addEventListener('resize', fitSessionHeight);
 window.addEventListener('orientationchange', () => setTimeout(fitSessionHeight, 120));
 
 // ---- 调整今天的顺序（器械被占用时先跳去做别的）----
-// 拖拽手势跟建计划页（strength.js 的 startBuilderDrag）是同一套技术：
-// pointer capture 挂在被拖的行本身、量目标位置前先把浮动的影子藏起来
-// 再问 elementFromPoint。这里不是"拖进空位"，是"拖到某一行就插到那"，
-// 逻辑不一样所以没直接复用那个函数，但用的是同一个 positionGhost()。
-function reorderRowHtml(item) {
-  const done = item.planned > 0 && item.done >= item.planned;
-  const status = item.planned === 0 ? '' : done ? '已完成' : item.done > 0 ? `${item.done}/${item.planned} 组` : '待开始';
-  return `
-    <div class="reorder-row${done ? ' is-done' : ''}" data-ex="${esc(item.ex.id)}" style="--c:${exerciseColor(item.ex)}">
-      <span class="reorder-handle" aria-hidden="true">⠿</span>
-      <span class="reorder-name">${esc(item.ex.name)}</span>
-      <span class="reorder-status">${status}</span>
-    </div>`;
-}
-
-function renderReorderSheet() {
-  const list = sessionExercises(sGetDay(strengthDate));
-  document.getElementById('reorder-list').innerHTML = list.map(reorderRowHtml).join('');
-}
-
-function openReorderSheet() {
-  renderReorderSheet();
-  document.getElementById('reorder-sheet').style.display = 'block';
-  document.body.style.overflow = 'hidden';
-}
-
-function closeReorderSheet() {
-  document.getElementById('reorder-sheet').style.display = 'none';
-  document.body.style.overflow = '';
-  renderSession(); // 顺序可能变了，重新算当前该练哪一组
-}
-
-function applyReorder(draggedId, targetId) {
-  if (draggedId === targetId) return;
+// 原来是独立的"调整顺序"按钮+拖拽列表页，改成直接点顶部进度条上的
+// 某一段——那一段本来就代表一个动作，点了就把它插到"接下来要做"的
+// 位置，不用再多开一个页面。已完成的段落点了没意义，直接忽略。
+function jumpToExercise(exId) {
   const day = sGetDay(strengthDate);
-  const ids = sessionExercises(day).map((item) => item.ex.id); // 当前实际显示顺序
-  const from = ids.indexOf(draggedId);
-  const to = ids.indexOf(targetId);
-  if (from < 0 || to < 0) return;
-  ids.splice(to, 0, ids.splice(from, 1)[0]);
+  const list = sessionExercises(day);
+  const target = list.find((item) => item.ex.id === exId);
+  if (!target || target.done >= target.planned) return; // 已完成/没有这个动作，不用跳
+  const pos = currentPos(list);
+  const toIdx = pos ? pos.exIdx : 0;
+  const ids = list.map((item) => item.ex.id);
+  const fromIdx = ids.indexOf(exId);
+  if (fromIdx === toIdx) return; // 已经是接下来要做的那个
+  ids.splice(toIdx, 0, ids.splice(fromIdx, 1)[0]);
   day.exerciseOrder = ids;
   markDirty();
-  renderReorderSheet();
-}
-
-function startReorderDrag(e, row) {
-  e.preventDefault();
-  const list = document.getElementById('reorder-list');
-  const rect = row.getBoundingClientRect();
-  const ghost = row.cloneNode(true);
-  ghost.className = 'reorder-drag-ghost';
-  ghost.style.width = rect.width + 'px';
-  document.body.appendChild(ghost);
-  positionGhost(ghost, e.clientX, e.clientY);
-  row.classList.add('dragging-source');
-  row.setPointerCapture(e.pointerId);
-
-  const clearHighlight = () => list.querySelectorAll('.reorder-row.drop-target').forEach((r) => r.classList.remove('drop-target'));
-  const cleanup = () => {
-    row.removeEventListener('pointermove', onMove);
-    row.removeEventListener('pointerup', onUp);
-    row.removeEventListener('pointercancel', onCancel);
-    ghost.remove();
-    row.classList.remove('dragging-source');
-    clearHighlight();
-  };
-  const onMove = (ev) => {
-    positionGhost(ghost, ev.clientX, ev.clientY);
-    clearHighlight();
-    ghost.style.visibility = 'hidden';
-    const el = document.elementFromPoint(ev.clientX, ev.clientY);
-    ghost.style.visibility = '';
-    const target = el && el.closest('.reorder-row');
-    if (target && target !== row) target.classList.add('drop-target');
-  };
-  const onUp = (ev) => {
-    ghost.style.visibility = 'hidden';
-    const el = document.elementFromPoint(ev.clientX, ev.clientY);
-    cleanup();
-    const target = el && el.closest('.reorder-row');
-    if (target && target !== row) applyReorder(row.dataset.ex, target.dataset.ex);
-  };
-  const onCancel = cleanup;
-  row.addEventListener('pointermove', onMove);
-  row.addEventListener('pointerup', onUp);
-  row.addEventListener('pointercancel', onCancel);
-}
-
-function initReorderSheet() {
-  const backBtn = document.getElementById('reorder-back');
-  if (backBtn) backBtn.addEventListener('click', closeReorderSheet);
-
-  const resetBtn = document.getElementById('reorder-reset-btn');
-  if (resetBtn) {
-    resetBtn.addEventListener('click', () => {
-      const day = sGetDay(strengthDate);
-      delete day.exerciseOrder;
-      markDirty();
-      renderReorderSheet();
-    });
-  }
-
-  const listEl = document.getElementById('reorder-list');
-  if (listEl) {
-    listEl.addEventListener('pointerdown', (e) => {
-      const row = e.target.closest('.reorder-row');
-      if (row) startReorderDrag(e, row);
-    });
-  }
+  renderSession();
 }
 
 // ---- 事件 ----
@@ -1160,10 +1077,6 @@ function initSession() {
       openExerciseDetail(editBtn.dataset.ex, { dayKey: strengthDate });
       return;
     }
-    if (e.target.closest('#btn-reorder')) {
-      openReorderSheet();
-      return;
-    }
     if (e.target.closest('#btn-reduce-set')) {
       reduceOneSet();
       return;
@@ -1201,7 +1114,14 @@ function initSession() {
     document.getElementById('finish-confirm').style.display = 'none';
   });
 
-  initReorderSheet();
+  // 顶部进度条不在 #session-body 里面（是它的上一个兄弟），单独挂一个监听
+  const progBar = document.getElementById('session-progress');
+  if (progBar) {
+    progBar.addEventListener('click', (e) => {
+      const seg = e.target.closest('.prog-seg');
+      if (seg && seg.dataset.ex) jumpToExercise(seg.dataset.ex);
+    });
+  }
 }
 
 window.initSession = initSession;
